@@ -8,6 +8,7 @@ import os
 import time
 
 from speech.agent_context import AgentRequest, AgentResponse
+from speech.olaf_client import OlafClient
 from speech.router_heuristic import STUB_REPLIES, is_direct_agent_call
 from speech.speech_editor import SpeechEditorClient
 
@@ -132,6 +133,17 @@ class OrchestratorClient:
 
     def __init__(self) -> None:
         self._speech_editor = SpeechEditorClient()
+        self._olaf = OlafClient()
+
+    async def _dispatch_specialist(
+        self, request: AgentRequest, response: AgentResponse
+    ) -> AgentResponse:
+        """Route to specialist agent when meeting-router delegates."""
+        target = response.routed_to or request.wake_word
+        if target == "olaf":
+            print(f"[{_ts()}] orchestrator → spawning Olaf (computer-use)")
+            return await self._olaf.execute(request)
+        return response
 
     async def invoke(self, request: AgentRequest) -> AgentResponse:
         logger.info("[%s] agent.request %s", _ts(), request.summary_for_log())
@@ -152,6 +164,9 @@ class OrchestratorClient:
             )
         else:
             response = _stub_response(request)
+
+        if response.should_respond:
+            response = await self._dispatch_specialist(request, response)
 
         if response.should_respond and response.text:
             response = await self._speech_editor.prepare(response, request)
