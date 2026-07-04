@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Node / Next
+node_modules/
+.next/
+out/
+.env.local
+
+# Worker runtime artifacts
+*.png
+chrome-profile/
