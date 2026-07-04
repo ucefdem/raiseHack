@@ -1,0 +1,1192 @@
+# PRD: Dedicated Meeting Computer Agent
+
+## 1. Product summary
+
+### Product name
+
+**Meeting Computer Agent**
+Working name: **Agent Workstation**
+
+### One-line description
+
+A web-controlled AI teammate that runs on a dedicated laptop, joins Google Meet as a participant, listens to the meeting, speaks out loud, shares its screen, reads local workspace files, browses websites, and creates Trello tasks.
+
+### Core idea
+
+The system gives a dedicated physical computer to an AI agent. The agent uses that computer like a teammate: it joins meetings, listens, speaks, opens documents, browses websites, and creates product-management tasks.
+
+For the hackathon MVP, the most important proof is not “the agent can do everything.” The most important proof is:
+
+> The agent can join a Google Meet call as a participant, hear the conversation, speak naturally, and later perform visible work from that meeting context.
+
+---
+
+## 2. MVP priority
+
+### Phase 0: Voice meeting agent first
+
+The first version should focus only on:
+
+1. User pastes a Google Meet link into the web app.
+2. Dedicated Mac receives the meeting link.
+3. Mac opens Chrome and joins the Google Meet using an agent-only account.
+4. Agent can hear meeting audio.
+5. Agent can speak back into the meeting.
+6. Agent waits for silence before speaking.
+7. Agent responds naturally when it believes someone is asking it something.
+
+This phase should not yet include Trello, file reading, browsing, or screen sharing unless the voice foundation is stable.
+
+### Why this comes first
+
+If the agent cannot reliably join, hear, and speak, then file reading, browsing, and Trello automation will not feel like a real meeting agent. The voice/meeting loop is the foundation.
+
+Gemini Live is a good candidate for this because the Live API is designed for low-latency realtime voice interactions, and it supports tool/function calling once you later add browser, file, and Trello tools.
+
+---
+
+## 3. Target users
+
+### Primary user
+
+The hackathon demo user: a team member who wants an AI teammate to join a meeting and help the team move from discussion to execution.
+
+### Future users
+
+* Product teams
+* Engineering teams
+* Startup teams
+* Project managers
+* Customer-success teams
+* Internal operations teams
+
+---
+
+## 4. Main demo story
+
+A team joins a Google Meet call. The AI agent joins as a participant from its own account.
+
+Someone says:
+
+> “Can you help us review this project brief and create execution tasks?”
+
+The agent waits for a pause, responds out loud, opens the project brief from its dedicated workspace, summarizes it, discusses the plan, browses a website for extra context, creates Trello cards, and opens the Trello board while sharing its screen.
+
+---
+
+## 5. Product goals
+
+### Goal 1: Prove the “AI teammate in a meeting” experience
+
+The agent should feel like an actual meeting participant, not just a chatbot.
+
+### Goal 2: Prove dedicated computer use
+
+The agent should operate from a real dedicated laptop with its own browser, accounts, workspace folder, and screen.
+
+### Goal 3: Prove autonomous workflow execution
+
+After the meeting discussion, the agent should be able to turn conversation and documents into concrete output, such as Trello tasks.
+
+### Goal 4: Keep the MVP simple enough to work
+
+The first working version should avoid unnecessary complexity: no multi-worker system, no automatic calendar joining, no complex user permissions, no production-grade audit logs.
+
+---
+
+## 6. Non-goals for MVP
+
+The first MVP will not support:
+
+* Multiple agent laptops
+* Automatic calendar-based meeting joining
+* Slack/Teams/Zoom support
+* Native desktop app control
+* Full file-system access
+* Production-grade permission management
+* Human approval flows
+* Full meeting transcript and audit log
+* Complex Trello task metadata
+* Multi-agent reasoning with many independent agents
+* Production security hardening
+* Support for all websites and all UI states
+
+---
+
+## 7. System architecture
+
+### High-level architecture
+
+```text
+User browser
+  ↓
+Hosted web app
+  ↓
+Hosted backend
+  ↓ WebSocket
+Dedicated Mac worker
+  ↓
+Chrome / Google Meet / local workspace / Trello
+  ↓
+Gemini Live voice agent
+```
+
+### Main components
+
+#### 1. Hosted web app
+
+A web interface where the user can:
+
+* Paste a Google Meet link
+* Start the agent
+* See agent status
+* Later: see task progress
+* Later: send text commands if needed
+
+Recommended stack:
+
+```text
+Next.js
+TailwindCSS
+Simple auth
+WebSocket status panel
+```
+
+#### 2. Hosted backend
+
+The backend coordinates the web app and the dedicated Mac worker.
+
+Responsibilities:
+
+* Receive meeting link from web app
+* Send command to Mac worker
+* Track current agent status
+* Maintain WebSocket connection to worker
+* Store simple session state
+* Later: expose APIs for file actions, Trello actions, and logs
+
+Recommended stack:
+
+```text
+FastAPI
+WebSocket
+PostgreSQL optional
+Redis optional later
+```
+
+#### 3. Dedicated Mac worker
+
+A local service running on the dedicated Mac.
+
+Responsibilities:
+
+* Maintain outbound WebSocket connection to hosted backend
+* Receive commands
+* Open Chrome
+* Join Google Meet
+* Manage audio routing
+* Send meeting audio to Gemini Live
+* Play Gemini audio back into Meet
+* Later: control browser, read files, create Trello cards
+
+Recommended stack:
+
+```text
+Python
+Playwright
+Gemini Live API
+macOS audio routing
+Local workspace folder reader
+Trello API client
+```
+
+#### 4. Browser controller
+
+For MVP, browser control should be hybrid:
+
+```text
+Primary: Playwright / Chrome automation
+Fallback: screenshot + vision + coordinate clicking
+```
+
+Playwright is useful because it can automate browser pages and provide structured accessibility snapshots, which are more reliable for agentic browser control than only relying on screenshots.
+
+#### 5. Voice engine
+
+For the first version:
+
+```text
+Google Meet audio → Gemini Live → Gemini spoken response → Google Meet microphone
+```
+
+The first implementation should use Gemini speech-to-speech as much as possible, instead of building a separate STT → LLM → TTS pipeline.
+
+Gemini Live also supports function calling, which means the same voice agent can later call tools like `read_file`, `open_website`, and `create_trello_card`.
+
+---
+
+## 8. Why Google Meet first
+
+For the MVP, Google Meet should be controlled through Chrome on the dedicated Mac.
+
+The official Google Meet REST API is useful for meeting spaces, conferences, participants, recordings, transcripts, and artifacts, but the MVP needs a live participant that joins through a browser, hears audio, speaks, and shares screen. So browser automation is the right path for the live agent experience.
+
+---
+
+## 9. Phase 0 detailed requirements: join, hear, speak
+
+### Phase 0 objective
+
+Build the smallest working version of the system where:
+
+> The agent joins a Google Meet call and can have a spoken conversation with the people in the meeting.
+
+### User flow
+
+1. User opens the hosted web app.
+2. User pastes a Google Meet link.
+3. User clicks “Start Agent.”
+4. Backend sends `JOIN_MEETING` command to the Mac worker.
+5. Mac worker opens Chrome.
+6. Chrome joins the Google Meet using the already-logged-in agent account.
+7. Agent enters the meeting.
+8. Agent audio pipeline starts.
+9. Agent listens to meeting audio.
+10. Agent waits until there is silence.
+11. Agent speaks out loud into the meeting.
+
+### Functional requirements
+
+#### FR-0.1: Paste Meet link
+
+The web app must allow the user to paste a Google Meet link.
+
+#### FR-0.2: Send command to Mac worker
+
+The hosted backend must send the meeting link to the connected Mac worker.
+
+#### FR-0.3: Worker online status
+
+The web app must show whether the Mac worker is online.
+
+Example statuses:
+
+```text
+Worker offline
+Worker connected
+Joining meeting
+In meeting
+Listening
+Speaking
+Error
+```
+
+#### FR-0.4: Join Google Meet
+
+The Mac worker must open the Meet link in Chrome and attempt to join the meeting.
+
+For the hackathon MVP, the Chrome profile should already be logged in to the agent-only Google account.
+
+#### FR-0.5: Use agent-only account
+
+The agent should join as a separate participant, not as the user.
+
+Example display name:
+
+```text
+AI Project Agent
+```
+
+#### FR-0.6: Hear meeting audio
+
+The worker must capture the meeting audio through a virtual audio route.
+
+#### FR-0.7: Speak into meeting
+
+The worker must route the Gemini-generated audio into the microphone input used by Google Meet.
+
+#### FR-0.8: Silence-based turn-taking
+
+The agent must avoid interrupting people. It should wait for a short silence window before responding.
+
+Suggested MVP behavior:
+
+```text
+If someone is speaking: do not respond.
+If silence lasts around 800–1500 ms: response may begin.
+If someone starts speaking while agent is speaking: stop or shorten response.
+```
+
+Gemini Live has voice/activity-related configuration capabilities, so the first implementation should use built-in activity detection where possible before building a custom VAD pipeline.
+
+#### FR-0.9: Natural addressing
+
+The agent should not require a fixed wake word.
+
+It should respond when it believes someone is asking it for help.
+
+Example phrases:
+
+```text
+Can you help us with this?
+What do you think, agent?
+Can someone summarize this?
+Can you turn this into tasks?
+Could you check the brief?
+```
+
+#### FR-0.10: Simple spoken personality
+
+The agent should speak briefly and clearly.
+
+Default style:
+
+```text
+Helpful
+Concise
+Meeting-friendly
+Does not over-talk
+Confirms what it is doing
+```
+
+Example:
+
+```text
+Sure. I’ll join the discussion and wait for a pause before responding.
+```
+
+---
+
+## 10. Phase 1 requirements: screen sharing
+
+### Objective
+
+Allow the agent to share the entire screen in Google Meet.
+
+### Requirements
+
+#### FR-1.1: Start screen share
+
+The agent should be able to start sharing the entire Mac screen.
+
+#### FR-1.2: Visible work
+
+When performing tasks, the agent should make its actions visible to the meeting participants.
+
+#### FR-1.3: Clean desktop
+
+The dedicated Mac should have a clean desktop and no personal files visible.
+
+### MVP note
+
+Screen sharing is useful for the hackathon demo, but it should come after the voice loop works. The first emotional “wow” moment is hearing the agent participate in the call.
+
+---
+
+## 11. Phase 2 requirements: local workspace file reading
+
+### Objective
+
+The agent can read files from a dedicated local workspace folder.
+
+### Workspace rule
+
+The agent should only access:
+
+```text
+/AgentWorkspace
+```
+
+It should not access random files on the Mac.
+
+### Supported file types
+
+* PDF
+* DOCX
+* Markdown
+* TXT
+* Images/screenshots
+* Spreadsheets
+
+### Example tool
+
+```json
+{
+  "name": "read_workspace_file",
+  "args": {
+    "filename": "project_brief.pdf"
+  }
+}
+```
+
+### Expected behavior
+
+The agent should be able to say:
+
+```text
+I found the project brief. The main goal is to build a meeting agent that can join calls, read project context, and create execution tasks. I see three main workstreams: meeting voice, document understanding, and task creation.
+```
+
+---
+
+## 12. Phase 3 requirements: website browsing
+
+### Objective
+
+The agent can browse a website during the meeting.
+
+### Requirements
+
+#### FR-3.1: Open website
+
+The agent can open a URL in Chrome.
+
+#### FR-3.2: Extract page content
+
+The agent can summarize the visible website content.
+
+#### FR-3.3: Discuss findings
+
+The agent can explain what it found out loud in the meeting.
+
+### Example
+
+User says:
+
+```text
+Can you check this competitor website and tell us what they offer?
+```
+
+Agent response:
+
+```text
+I’m opening the website now. I’ll look for the main product, target users, and pricing or positioning.
+```
+
+---
+
+## 13. Phase 4 requirements: Trello task creation
+
+### Objective
+
+The agent turns the project brief and meeting discussion into Trello cards.
+
+### Trello implementation
+
+Use the Trello API to create cards, then open the Trello board in Chrome to show the result. The Trello REST API supports creating cards, which makes this more reliable than clicking through the UI during a live demo.
+
+### Card format
+
+Each card should include:
+
+```text
+Title
+Short description
+Optional checklist with 2–4 items
+```
+
+### Example cards
+
+```text
+Card 1: Implement Google Meet Join Flow
+Description: Build the Mac worker command that opens Chrome and joins a pasted Google Meet link using the agent account.
+
+Checklist:
+- Receive meeting link from backend
+- Open Chrome profile
+- Join Meet
+- Report status to web app
+```
+
+```text
+Card 2: Build Voice Loop
+Description: Route meeting audio to Gemini Live and send Gemini spoken output back into the meeting.
+
+Checklist:
+- Configure virtual audio
+- Stream audio to Gemini Live
+- Play response into Meet
+- Add silence-based turn-taking
+```
+
+---
+
+## 14. Agent behavior requirements
+
+### Speaking rules
+
+The agent should:
+
+* Wait for silence before speaking
+* Keep responses short
+* Explain what it is doing
+* Avoid long monologues
+* Ask for clarification only when truly blocked
+* Not interrupt humans
+* Not pretend to have completed actions before tools confirm success
+
+### Example good responses
+
+```text
+I can help with that. I’ll first read the project brief, then I’ll summarize the main goals and create a small set of Trello tasks.
+```
+
+```text
+I found three main requirements: joining meetings, handling voice interaction, and creating project tasks. I’ll turn these into Trello cards now.
+```
+
+### Example bad responses
+
+```text
+I will now create a complete enterprise-grade workflow automation solution.
+```
+
+Too vague and too long.
+
+```text
+Done.
+```
+
+Too little context.
+
+---
+
+## 15. Tool design
+
+### Core tools for MVP
+
+#### join_meeting
+
+```json
+{
+  "name": "join_meeting",
+  "args": {
+    "meeting_url": "https://meet.google.com/xxx-yyyy-zzz"
+  }
+}
+```
+
+#### start_voice_session
+
+```json
+{
+  "name": "start_voice_session",
+  "args": {
+    "meeting_id": "current"
+  }
+}
+```
+
+#### speak_to_meeting
+
+```json
+{
+  "name": "speak_to_meeting",
+  "args": {
+    "text_or_audio": "Sure, I can help with that."
+  }
+}
+```
+
+#### get_meeting_status
+
+```json
+{
+  "name": "get_meeting_status",
+  "args": {}
+}
+```
+
+### Later tools
+
+#### start_screen_share
+
+```json
+{
+  "name": "start_screen_share",
+  "args": {
+    "mode": "entire_screen"
+  }
+}
+```
+
+#### read_workspace_file
+
+```json
+{
+  "name": "read_workspace_file",
+  "args": {
+    "filename": "project_brief.pdf"
+  }
+}
+```
+
+#### open_website
+
+```json
+{
+  "name": "open_website",
+  "args": {
+    "url": "https://example.com"
+  }
+}
+```
+
+#### create_trello_cards
+
+```json
+{
+  "name": "create_trello_cards",
+  "args": {
+    "cards": [
+      {
+        "title": "Build voice loop",
+        "description": "Connect meeting audio to Gemini Live and route responses back to Meet.",
+        "checklist": [
+          "Set up virtual audio",
+          "Stream audio to Gemini",
+          "Play response into Meet"
+        ]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 16. Backend API
+
+### POST /sessions
+
+Creates a new agent session.
+
+Request:
+
+```json
+{
+  "meeting_url": "https://meet.google.com/xxx-yyyy-zzz"
+}
+```
+
+Response:
+
+```json
+{
+  "session_id": "sess_123",
+  "status": "created"
+}
+```
+
+### POST /sessions/{session_id}/start
+
+Starts the agent.
+
+Response:
+
+```json
+{
+  "status": "joining_meeting"
+}
+```
+
+### GET /sessions/{session_id}
+
+Returns current status.
+
+Response:
+
+```json
+{
+  "session_id": "sess_123",
+  "status": "in_meeting",
+  "worker_status": "connected",
+  "last_event": "Agent joined meeting"
+}
+```
+
+### WebSocket /worker
+
+Used by the Mac worker to receive commands and send status events.
+
+Example command:
+
+```json
+{
+  "type": "JOIN_MEETING",
+  "session_id": "sess_123",
+  "meeting_url": "https://meet.google.com/xxx-yyyy-zzz"
+}
+```
+
+Example status event:
+
+```json
+{
+  "type": "STATUS",
+  "session_id": "sess_123",
+  "status": "listening"
+}
+```
+
+---
+
+## 17. Mac worker design
+
+### Worker responsibilities
+
+The Mac worker should:
+
+1. Start on the dedicated Mac.
+2. Connect to hosted backend using WebSocket.
+3. Wait for commands.
+4. Open Chrome with the agent profile.
+5. Join Google Meet.
+6. Set correct audio devices.
+7. Start Gemini Live session.
+8. Route meeting audio to Gemini.
+9. Route Gemini spoken output back into Meet.
+10. Send status updates to backend.
+
+### Worker internal modules
+
+```text
+worker/
+  main.py
+  websocket_client.py
+  meet_controller.py
+  audio_router.py
+  gemini_live_client.py
+  turn_taking.py
+  browser_controller.py
+  status.py
+```
+
+### Suggested worker states
+
+```text
+IDLE
+CONNECTING_TO_BACKEND
+READY
+JOINING_MEETING
+IN_WAITING_ROOM
+IN_MEETING
+LISTENING
+THINKING
+SPEAKING
+ERROR
+```
+
+---
+
+## 18. Audio design
+
+### Goal
+
+The agent must hear the meeting and speak into the meeting without relying on the physical microphone and speaker.
+
+### Required routing
+
+```text
+Google Meet output audio
+  ↓
+Virtual audio input captured by worker
+  ↓
+Gemini Live
+  ↓
+Gemini output audio
+  ↓
+Virtual microphone input selected in Google Meet
+```
+
+### Key risks
+
+* Echo
+* Feedback loop
+* Gemini hearing itself
+* Wrong input/output selected in Meet
+* macOS permission issues
+* Browser permission prompts
+* Audio latency
+* Agent speaking over humans
+
+### MVP strategy
+
+Start with a controlled setup:
+
+* One dedicated Mac
+* One Chrome profile
+* One Google Meet account
+* Pre-configured audio devices
+* Pre-granted browser permissions
+* Same Meet testing room
+* Manual verification before demo
+
+---
+
+## 19. Data model
+
+For MVP, keep data minimal.
+
+### Session
+
+```json
+{
+  "id": "sess_123",
+  "meeting_url": "https://meet.google.com/xxx-yyyy-zzz",
+  "status": "in_meeting",
+  "created_at": "timestamp",
+  "updated_at": "timestamp"
+}
+```
+
+### Worker
+
+```json
+{
+  "id": "worker_mac_1",
+  "status": "connected",
+  "last_seen_at": "timestamp",
+  "current_session_id": "sess_123"
+}
+```
+
+### Event
+
+Optional for MVP, useful for debugging.
+
+```json
+{
+  "id": "event_123",
+  "session_id": "sess_123",
+  "type": "STATUS",
+  "message": "Agent joined meeting",
+  "created_at": "timestamp"
+}
+```
+
+---
+
+## 20. Success metrics
+
+### Phase 0 success metrics
+
+The first milestone is successful if:
+
+1. User can paste a Meet link into the web app.
+2. Mac worker receives the command.
+3. Chrome opens the meeting link.
+4. Agent joins the meeting.
+5. Agent hears people speaking.
+6. Agent responds out loud.
+7. Agent does not constantly interrupt.
+8. Agent can answer at least five basic spoken questions during the meeting.
+
+### Example test questions
+
+```text
+Can you hear me?
+What is your role in this meeting?
+Can you summarize what I just said?
+Can you wait until I finish speaking before responding?
+Can you explain what you can do next?
+```
+
+### Phase 4 success metrics
+
+The full hackathon demo is successful if:
+
+1. Agent joins the meeting.
+2. Agent speaks naturally.
+3. Agent shares its screen.
+4. Agent opens project brief.
+5. Agent summarizes brief.
+6. Agent browses a website.
+7. Agent creates Trello cards.
+8. Agent opens Trello board showing created cards.
+
+---
+
+## 21. Risks and challenges
+
+### Risk 1: Google Meet UI automation is fragile
+
+Google Meet UI can change, and buttons may appear differently depending on account, browser permissions, or meeting state.
+
+Mitigation:
+
+* Use a fixed Chrome profile.
+* Pre-login the agent account.
+* Test with the same Meet flow.
+* Use Playwright where possible.
+* Use screenshot fallback for UI controls.
+
+### Risk 2: Audio routing is harder than expected
+
+This is the biggest technical risk in Phase 0.
+
+Mitigation:
+
+* Solve audio before solving Trello/files.
+* Use one controlled Mac.
+* Use virtual audio routing.
+* Test “agent can hear” and “agent can speak” separately before connecting Gemini.
+
+### Risk 3: Agent interrupts people
+
+Since the agent has no wake word, it may respond too often.
+
+Mitigation:
+
+* Add silence gating.
+* Prompt Gemini to respond only when addressed or when the group clearly asks for help.
+* Keep responses short.
+* Add a configurable “response sensitivity” later.
+
+### Risk 4: Speech-to-speech tool use may misunderstand tasks
+
+Voice agents can misunderstand spoken arguments, especially URLs, names, and file names.
+
+Mitigation:
+
+* For Phase 0, avoid complex tool calls.
+* For later phases, show the interpreted command in the web app.
+* Use file picker / workspace listing where possible.
+
+### Risk 5: Full autonomy is dangerous in production
+
+For the hackathon, full autonomy is acceptable. For production, autonomous email sending, file access, and task creation would need approvals and logs.
+
+Mitigation later:
+
+* Add action confirmations
+* Add audit logs
+* Add workspace-only file access
+* Add emergency stop
+* Add role-based permissions
+
+---
+
+## 22. Implementation roadmap
+
+### Milestone 1: Worker connection
+
+Build:
+
+* Hosted backend
+* WebSocket worker connection
+* Web app status page
+
+Done when:
+
+```text
+Mac worker appears as “online” in web app.
+```
+
+### Milestone 2: Join Google Meet
+
+Build:
+
+* Web app input for Meet link
+* Backend command
+* Mac worker opens Chrome
+* Worker joins Meet
+
+Done when:
+
+```text
+Agent account appears inside the Google Meet call.
+```
+
+### Milestone 3: Audio capture
+
+Build:
+
+* Virtual audio route
+* Capture Meet audio
+* Send test audio to local logger or simple STT/debug output
+
+Done when:
+
+```text
+Worker can detect that someone in the meeting is speaking.
+```
+
+### Milestone 4: Audio output
+
+Build:
+
+* Route generated/test audio into Google Meet microphone
+
+Done when:
+
+```text
+People in the meeting can hear the agent say a test phrase.
+```
+
+### Milestone 5: Gemini Live conversation
+
+Build:
+
+* Stream meeting audio to Gemini Live
+* Receive spoken response
+* Route response to Meet
+* Add silence-based response gating
+
+Done when:
+
+```text
+People can ask the agent simple questions and hear answers in the meeting.
+```
+
+### Milestone 6: Screen sharing
+
+Build:
+
+* Start full-screen sharing
+* Make agent actions visible
+
+Done when:
+
+```text
+Participants can see the agent’s screen.
+```
+
+### Milestone 7: File reading
+
+Build:
+
+* Workspace folder reader
+* PDF/DOCX/TXT/Markdown/spreadsheet/image extraction
+* `read_workspace_file` tool
+
+Done when:
+
+```text
+Agent can summarize a project brief from the workspace folder.
+```
+
+### Milestone 8: Website browsing
+
+Build:
+
+* Open website tool
+* Page extraction/summarization
+* Browser visible on shared screen
+
+Done when:
+
+```text
+Agent can browse a website and summarize what it found.
+```
+
+### Milestone 9: Trello cards
+
+Build:
+
+* Trello API integration
+* Create cards
+* Open board after creation
+
+Done when:
+
+```text
+Agent creates Trello cards from the brief and meeting discussion.
+```
+
+---
+
+## 23. Recommended first build
+
+Start with this exact first target:
+
+```text
+From the web app, paste a Google Meet link.
+The dedicated Mac joins the Meet.
+Someone says: “Can you hear me?”
+The agent waits for silence and says out loud: “Yes, I can hear you.”
+```
+
+This is the real foundation.
+
+After that, add:
+
+```text
+“Can you summarize what I just said?”
+```
+
+Then:
+
+```text
+“Can you explain what you can do in this meeting?”
+```
+
+Only after those work, add file reading and Trello.
+
+---
+
+## 24. Hackathon positioning
+
+### Product pitch
+
+“Most AI agents live inside chat boxes. Our agent lives on a real dedicated computer. It joins your meeting like a teammate, listens to the discussion, speaks back, shares its screen, reads the project context, browses the web, and turns the conversation into execution tasks.”
+
+### Why this is agentic
+
+This is not a single retrieve-and-answer call. The system:
+
+1. Joins a live meeting.
+2. Listens to human discussion.
+3. Decides when to respond.
+4. Uses tools.
+5. Reads documents.
+6. Browses websites.
+7. Creates project-management tasks.
+8. Shows its work on screen.
+
+### Demo tagline
+
+```text
+An AI teammate with its own computer.
+```
+
+---
+
+## 25. Final MVP scope
+
+### Must-have
+
+* Hosted web app
+* One dedicated Mac worker
+* Paste Google Meet link
+* Agent joins Meet
+* Agent hears meeting
+* Agent speaks out loud
+* Waits for silence
+* Uses agent-only account
+
+### Should-have
+
+* Screen sharing
+* Read local project brief
+* Summarize brief aloud
+* Browse website
+* Create Trello cards
+
+### Could-have
+
+* Meeting transcript
+* Action log
+* Pause button
+* Manual takeover
+* Calendar integration
+* Slack integration
+
+### Not now
+
+* Multiple workers
+* Zoom/Teams
+* Native desktop apps
+* Full autonomous email sending
+* Production security model
+* Complex multi-agent architecture

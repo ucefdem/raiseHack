@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 *.so
 .Python
 *.egg-info/
@@ -18,6 +19,7 @@ env/
 .env
 .env.*
 !.env.example
+.env.local
 
 # macOS
 .DS_Store
@@ -33,3 +35,12 @@ env/
 # Logs & temp
 *.log
 .tmp/
+
+# Node / Next
+node_modules/
+.next/
+out/
+
+# Worker runtime artifacts
+*.png
+chrome-profile/

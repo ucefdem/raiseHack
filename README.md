@@ -1,48 +1,65 @@
 # RAISE Hackathon — Multi-Agent Meeting Assistant
 
-Simulate a Google Meet with **mic in / speaker out**, stream real-time transcription, spawn agents on wake words, and speak confirmations via TTS.
+Two complementary stacks live in this repo:
 
-## Architecture
+1. **Real Google Meet join** (`backend/` + `worker/` + `web/`) — Chrome joins a Meet, virtual audio bridges participants ↔ Gemini Live.
+2. **Local speech / agent layer** (`speech/` + `agents/`) — Gradium STT/TTS, wake-word routing, meeting-router, specialist agents.
+
+Long-term goal: wire the speech layer into the Meet worker so agents respond in a real call, not only via `meeting_sim`.
+
+---
+
+## Architecture A — Real Google Meet (Phase 0)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Meet Simulator (your laptop mic + speaker)                 │
-│  speech/meeting_sim.py                                      │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-         mic (24kHz) ──────┤────── speaker (48kHz)
-                           │
-              ┌────────────▼────────────┐
-              │  Real-time STT (constant)│  ← rolling transcript = meeting context
-              │  speech/stt.py           │
-              └────────────┬────────────┘
-                           │ final utterance
-              ┌────────────▼────────────┐
-              │  Buzzword trigger        │  "Angie", "Nikki", "Olaf"
-              │  speech/triggers.py      │
-              └────────────┬────────────┘
-                           │ wake word detected
-              ┌────────────▼────────────┐
-              │  Orchestrator (Angie)    │  ← Cursor Cloud Agent (simulated for now)
-              │  speech/orchestrator.py  │
-              └────────────┬────────────┘
-                           │ "Agent spawned with success"
-              ┌────────────▼────────────┐
-              │  TTS (Speech Agent)      │
-              │  speech/tts.py           │
-              └─────────────────────────┘
+Web app (Next.js)  --REST-->  Backend (FastAPI)  --WebSocket-->  Worker (Python)
+                                                                    |
+                                        Playwright/Chrome + Google Meet
+                                                                    |
+                                        Virtual audio  <-->  Gemini Live
 ```
 
-### Agent skills (for Cursor Cloud Agents)
+- `backend/` — FastAPI: session REST + `/worker` WebSocket
+- `worker/` — Meet control, audio routing, Gemini Live
+- `web/` — control panel (paste link, start, status)
+- `docs/AUDIO_SETUP.md` — virtual audio (PipeWire / BlackHole)
 
-| Agent | Folder | Wake word |
-|-------|--------|-----------|
-| Angie (Orchestrator) | `agents/angie/SKILL.md` | `Angie` |
-| Nikki (Sales / Jira) | `agents/nikki/SKILL.md` | `Nikki` |
-| Olaf (Computer-Use) | `agents/olaf/SKILL.md` | `Olaf` |
-| Speech (TTS) | `agents/speech/SKILL.md` | — |
+### Prerequisites
 
-## Quick start
+- `GEMINI_API_KEY` with Live API access
+- Chrome with agent Google account in `CHROME_USER_DATA_DIR`
+- Virtual audio devices (see `docs/AUDIO_SETUP.md`)
+- Python 3.11+, Node 18+, PortAudio (`brew install portaudio` on macOS)
+
+### Run Meet stack
+
+```bash
+# 1. Backend
+cd backend && uv sync && uv run uvicorn main:app --host 0.0.0.0 --port 8000
+
+# 2. Worker (separate terminal)
+cd worker && uv sync && uv run playwright install chromium
+cp .env.example .env   # edit GEMINI_API_KEY + audio devices
+set -a && source .env && set +a
+uv run python main.py
+
+# 3. Web app (separate terminal)
+cd web && npm install && cp .env.local.example .env.local && npm run dev
+```
+
+Open http://localhost:3000 → confirm worker connected → paste Meet link → **Start Agent**.
+
+Verify audio first: `uv run python verify_audio.py devices|speak|listen`
+
+---
+
+## Architecture B — Local speech sim + agents
+
+```
+mic → Gradium STT → wake word → meeting-router → specialist → speech-editor → Gradium TTS → speaker
+```
+
+Run locally with headphones:
 
 ```bash
 cd "/Users/niconymand/Documents/RAISE Hackathon"
@@ -50,82 +67,52 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 export GRADIUM_API_KEY="gd_..."
-export BUZZWORDS="Angie,Nikki,Olaf"   # optional
-export VOICE_ID="YTpq7expH9539ERJ"     # optional — Emma
+export BUZZWORDS="Angie,Nikki,Olaf"
+export STT_FINAL_SILENCE_S=2.5
+export AGENT_INVOKE_DELAY_S=0.5
+export STT_TRIGGER_SILENCE_S=1.0
 
 python -m speech.meeting_sim
 ```
 
-Put on **headphones**, then say something like:
+### Agent skills
 
-> "Hey **Angie**, can you get Olaf to show the dashboard?"
+| Agent | Folder | Wake word |
+|-------|--------|-----------|
+| Meeting router | `agents/meeting-router/SKILL.md` | — |
+| Angie (Orchestrator) | `agents/angie/SKILL.md` | `Angie` |
+| Nikki (Sales) | `agents/nikki/SKILL.md` | `Nikki` |
+| Olaf (Computer-Use) | `agents/olaf/SKILL.md` | `Olaf` |
+| Speech editor | `agents/speech-editor/SKILL.md` | — |
 
-Expected output:
+### Speech env vars
 
-```
-[14:30:01.123 partial] hey angie can you get olaf
-[14:30:03.456 final  ] Hey Angie, can you get Olaf to show the dashboard?
-[14:30:03.457] Agent spawned with success — Orchestrator (Angie)
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRADIUM_API_KEY` | — | STT + TTS |
+| `ROUTER_MODE` | `heuristic` | `heuristic` / `listen` / `cloud` |
+| `SPEECH_EDITOR_MODE` | `local` | `local` / `cloud` / `off` |
+| `BUZZWORDS` | `Angie,Nikki,Olaf` | Wake words |
 
-You'll also **hear** the confirmation if `SPEAK_CONFIRM=1` (default).
-
-## Environment variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `GRADIUM_API_KEY` | Yes | — | Gradium STT + TTS |
-| `VOICE_ID` | No | Emma | TTS voice ID |
-| `LANGUAGE` | No | `en` | STT language |
-| `BUZZWORDS` | No | `Angie,Nikki,Olaf` | Comma-separated wake words |
-| `SPEAK_CONFIRM` | No | `1` | Speak spawn confirmation via TTS |
-| `SHOW_PARTIALS` | No | `1` | Live partial lines (`0` = only `[final]` output) |
-| `SHOW_PARTIALS` | No | `1` | Print live partial transcript (`0` = finals only) |
-
-## Your scope vs teammates
-
-| Piece | Owner | Status |
-|-------|-------|--------|
-| Meet sim (mic/speaker) | You | `speech/audio_io.py` |
-| Real-time STT + context | You | `speech/stt.py` |
-| Buzzword → orchestrator | You | `speech/triggers.py` + `orchestrator.py` |
-| Real-time TTS | You | `speech/tts.py` |
-| Angie orchestrator (cloud) | Teammate | Simulated → Cloud Agent |
-| Nikki / Jira MCP | Teammate | Skill stub ready |
-| Olaf computer-use | Teammate | Skill stub ready |
-| Real GMeet join (Oleg?) | Future | Out of scope for sim |
-
-## Is real-time possible?
-
-**Yes.** The sim already does:
-
-- **STT**: Gradium WebSocket, ~80 ms frames, partial + final transcripts
-- **TTS**: streams PCM chunks to speaker as they're generated
-- **Latency**: typically sub-second for STT partials; TTS time-to-first-audio ~200–400 ms
-
-Real GMeet join is a separate integration (browser bot, Meet API, or virtual audio cable). Mic/speaker sim is the right hackathon MVP.
+---
 
 ## Project layout
 
 ```
-speech/
-  meeting_sim.py    # ← run this
-  audio_io.py       # mic + speaker (Meet sim)
-  stt.py            # real-time STT + transcript context
-  tts.py            # real-time TTS
-  triggers.py       # buzzword detection
-  orchestrator.py   # simulated Angie spawn
-
-agents/
-  angie/SKILL.md
-  nikki/SKILL.md
-  olaf/SKILL.md
-  speech/SKILL.md
+backend/          # FastAPI session + worker WebSocket
+worker/           # Chrome Meet join + Gemini Live
+web/              # Next.js control panel
+speech/           # Gradium STT/TTS + routing (local sim)
+agents/           # Cursor cloud agent SKILL.md files
+docs/             # Audio setup guide
 ```
 
-## Troubleshooting
+## Integration (next step)
 
-- **No `[partial]` lines** → mic permissions (macOS: System Settings → Privacy → Microphone)
-- **No `[final]` lines** → pause 1–2 s after speaking (semantic VAD)
-- **Wake word not detected** → say the name clearly: "Hey Angie, ..."
-- **SSL / certificate error on macOS** → `pip install certifi` (included in requirements) and re-run; or run `/Applications/Python 3.12/Install Certificates.command`
+Replace Gemini Live in `worker/` with the `speech/` pipeline:
+
+- **Hear**: route `AudioRouter` capture → Gradium STT instead of Gemini input
+- **Think**: `AgentRequest` → `OrchestratorClient` (meeting-router + specialists)
+- **Speak**: agent reply → Gradium TTS → `AudioRouter` playback into Meet mic
+
+Both stacks already use virtual audio I/O — the swap is in the worker brain, not Chrome.
