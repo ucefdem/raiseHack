@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "/api/backend";
 
 type SessionState = {
   session_id: string;

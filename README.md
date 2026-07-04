@@ -88,3 +88,42 @@ Meet participants → virtual capture (16 kHz)
 ```
 
 Core loop: `speech/meeting_session.py` · Meet audio bridge: `worker/speech_bridge.py`
+
+## Remote demo (ngrok)
+
+With a **single ngrok tunnel on port 3000**, the web app proxies API calls to the backend:
+
+- Browser → `https://your-ngrok.dev/api/backend/...`
+- Next.js (on your Mac) → `http://127.0.0.1:8000/...`
+
+Set in `web/.env.local`:
+
+```
+NEXT_PUBLIC_BACKEND_URL=/api/backend
+```
+
+Restart `npm run dev` after changing env or `next.config.mjs`.
+
+### On your machine (host)
+
+```bash
+# 1. Backend :8000
+cd backend && uv run uvicorn main:app --host 0.0.0.0 --port 8000
+
+# 2. Worker (stays on localhost WS — do NOT use the ngrok web URL here)
+cd worker && set -a && source .env && set +a && uv run python main.py
+# worker/.env: BACKEND_WS_URL=ws://localhost:8000/worker
+
+# 3. Web :3000
+cd web && npm run dev
+
+# 4. One ngrok tunnel
+ngrok http --url=surviving-cane-steering.ngrok-free.dev 3000
+```
+
+Remote tester opens the ngrok URL. They should see **Worker connected**.
+
+### Optional: second ngrok tunnel for :8000
+
+Only needed if you set `NEXT_PUBLIC_BACKEND_URL=https://...` to hit FastAPI directly instead of the proxy.
+
