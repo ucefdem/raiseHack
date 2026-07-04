@@ -15,7 +15,10 @@ You are spawned **after** the meeting-router decides `action: "respond"` and rou
 
 - Receive task context from meeting-router
 - Delegate to the right specialist agent
-- Return a short status update suitable for speech output
+- Return status text for the task — **speech-editor** rewrites it before TTS
+- Do not optimize for spoken form; write clear task output
+
+See `agents/speech-editor/SKILL.md` for the voice rewrite step.
 
 ## Available agents
 
@@ -23,7 +26,8 @@ You are spawned **after** the meeting-router decides `action: "respond"` and rou
 |-------|-----------|------------|---------|
 | Sales Agent (Nikki) | `Nikki` | `agents/nikki/SKILL.md` | Jira, CRM, deal status |
 | Computer-Use (Olaf) | `Olaf` | `agents/olaf/SKILL.md` | Screen share, open URLs, show analytics |
-| Speech Agent | — | `agents/speech/SKILL.md` | TTS delivery of agent responses |
+| Speech Editor | — | `agents/speech-editor/SKILL.md` | LLM text → conversational script |
+| Speech (TTS) | — | `agents/speech/SKILL.md` | Gradium audio delivery |
 
 ## Routing rules
 

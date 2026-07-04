@@ -45,10 +45,13 @@ class AgentResponse:
     """Text returned by orchestrator / specialist agent — fed to TTS."""
 
     text: str
-    """Spoken aloud via TTS."""
+    """Spoken aloud via TTS — after speech-editor, if enabled."""
 
     agent_name: str
     """Who answered, e.g. Sales Agent (Nikki)."""
+
+    raw_text: str | None = None
+    """Pre-edit LLM text from specialist/orchestrator (logs only)."""
 
     routed_to: str | None = None
     """Optional: specialist Angie delegated to."""

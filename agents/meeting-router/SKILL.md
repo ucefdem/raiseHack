@@ -67,7 +67,7 @@ When in doubt, choose **listen**. Do not interrupt the meeting for casual mentio
 |-------|----------|--------|
 | `action` | yes | `"listen"` or `"respond"` |
 | `routed_to` | when respond | `"angie"`, `"nikki"`, `"olaf"`, or `null` |
-| `response_text` | when respond | 1–2 sentences, natural for TTS |
+| `response_text` | when respond | Raw reply from specialist — speech-editor rewrites before TTS |
 | `reason` | yes | Short log line (not spoken) |
 
 ## Specialists
@@ -102,7 +102,7 @@ When `action` is `"respond"`, spawn the specialist at `routed_to` (via Cursor Cl
 2. POST / resume meeting-router cloud agent with request.to_json()
 3. Parse agent output with parse_router_response()
 4. If action == "listen" → speech layer continues STT, no TTS
-5. If action == "respond" → TTS response_text, spawn routed_to specialist
+5. If action == "respond" → spawn routed_to specialist → speech-editor → TTS
 ```
 
 Parser lives in `speech/orchestrator.py` — `parse_router_response()`.

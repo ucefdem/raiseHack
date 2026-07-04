@@ -1,50 +1,46 @@
 ---
 name: speech-agent
 description: >-
-  Speech agent. Converts agent text output into natural spoken audio via Gradium
-  TTS. Use for all agent responses that should be heard in the meeting.
+  Speech delivery agent. Plays Gradium TTS audio in the simulated Meet. Upstream
+  text must pass through speech-editor before reaching TTS.
 ---
 
-# Speech Agent
+# Speech Agent (TTS delivery)
 
-Translates LLM/agent text output into natural speech for the simulated Meet.
-
-## Implementation
-
-Lives in `speech/tts.py` — Gradium TTS WebSocket, persistent connection, 48 kHz PCM.
+Plays agent replies aloud via Gradium TTS. **Does not** rewrite LLM text — that is `speech-editor`.
 
 ## Pipeline
 
 ```
-wake word in [final] → AgentRequest → orchestrator.invoke() → AgentResponse.text → TTS
+wake word → meeting-router → specialist LLM
+  → speech-editor (conversational rewrite)
+  → AgentResponse.text (spoken script)
+  → Gradium TTS (speech/tts.py) → speaker
 ```
 
-## AgentRequest (speech → orchestrator)
+## Implementation
 
-Defined in `speech/agent_context.py`. Passed on every spawn:
+| Piece | Location |
+|-------|----------|
+| TTS WebSocket | `speech/tts.py` |
+| Speech rewrite | `agents/speech-editor/SKILL.md` + `speech/speech_editor.py` |
+| Orchestrator hook | `speech/orchestrator.py` → `SpeechEditorClient.prepare()` |
 
-| Field | Purpose |
-|-------|---------|
-| `wake_word` | Which agent was called (`nikki`, `olaf`, `angie`) |
-| `utterance` | The triggering final transcript |
-| `meeting_transcript` | Full rolling meeting text |
-| `recent_transcript` | Last ~8 finals (compact context) |
+## AgentResponse fields
 
-Angie replaces `OrchestratorClient.invoke()` — speech layer unchanged.
+| Field | Goes to TTS? |
+|-------|----------------|
+| `text` | **Yes** — post speech-editor |
+| `raw_text` | No — original LLM output (logs) |
 
 ## Configuration
 
 | Env var | Default | Purpose |
 |---------|---------|---------|
-| `VOICE_ID` | `YTpq7expH9539ERJ` | Gradium voice |
-| `SPEAK_RESPONSE` | `1` | Speak `AgentResponse.text` via TTS |
-
-## Guidelines for upstream agents
-
-- Keep responses under 3 sentences (meeting attention span)
-- No markdown, bullets, or URLs spelled out unless needed
-- Numbers and dates should be speech-friendly
+| `VOICE_ID` | Emma | Gradium voice |
+| `SPEAK_RESPONSE` | `1` | Speak `AgentResponse.text` |
+| `SPEECH_EDITOR_MODE` | `local` | `local` / `cloud` / `off` |
 
 ## Barge-in
 
-If the user starts speaking during TTS playback, audio is interrupted automatically.
+User speech during TTS interrupts playback (`speech/guard.py`).

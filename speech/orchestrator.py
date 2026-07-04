@@ -9,6 +9,7 @@ import time
 
 from speech.agent_context import AgentRequest, AgentResponse
 from speech.router_heuristic import STUB_REPLIES, is_direct_agent_call
+from speech.speech_editor import SpeechEditorClient
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,12 @@ class OrchestratorClient:
 
     Teammate replaces the body of `invoke()` with Cursor Cloud Agent API
     when ROUTER_MODE=cloud.
+
+    All spoken replies pass through SpeechEditorClient before TTS.
     """
+
+    def __init__(self) -> None:
+        self._speech_editor = SpeechEditorClient()
 
     async def invoke(self, request: AgentRequest) -> AgentResponse:
         logger.info("[%s] agent.request %s", _ts(), request.summary_for_log())
@@ -146,6 +152,9 @@ class OrchestratorClient:
             )
         else:
             response = _stub_response(request)
+
+        if response.should_respond and response.text:
+            response = await self._speech_editor.prepare(response, request)
 
         if response.should_respond and response.text:
             logger.info("[%s] agent.response %s", _ts(), response.summary_for_log())
