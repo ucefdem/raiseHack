@@ -28,6 +28,13 @@ function prettify(status: string): string {
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function normalizeMeetUrl(raw: string): string {
+  const url = raw.trim();
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url.replace(/^\/+/, "")}`;
+}
+
 export default function Home() {
   const [meetingUrl, setMeetingUrl] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -77,7 +84,7 @@ export default function Home() {
       const createRes = await fetch(`${BACKEND}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meeting_url: meetingUrl.trim() }),
+        body: JSON.stringify({ meeting_url: normalizeMeetUrl(meetingUrl) }),
       });
       if (!createRes.ok) throw new Error("Failed to create session");
       const created = await createRes.json();

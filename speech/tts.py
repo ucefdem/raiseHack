@@ -9,14 +9,10 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
 import websockets
 
+from speech.audio_output import AudioOutput
 from speech.ssl_context import websocket_ssl_context
-
-if TYPE_CHECKING:
-    from speech.audio_io import AudioPlayer
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +31,7 @@ class GradiumTTS:
 
     _ws: websockets.WebSocketClientProtocol | None = field(default=None, repr=False)
     _recv_task: asyncio.Task | None = field(default=None, repr=False)
-    _player: AudioPlayer | None = field(default=None, repr=False)
+    _player: AudioOutput | None = field(default=None, repr=False)
     _active_req_id: str | None = field(default=None, repr=False)
     _cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     _ready_futures: dict[str, asyncio.Future] = field(default_factory=dict, repr=False)
@@ -50,7 +46,7 @@ class GradiumTTS:
         )
         logger.info("[%s] TTS connected", _ts())
 
-    async def _ensure_recv_loop(self, player: AudioPlayer) -> None:
+    async def _ensure_recv_loop(self, player: AudioOutput) -> None:
         self._player = player
         if self._recv_task is None or self._recv_task.done():
             self._recv_task = asyncio.create_task(self._recv_loop())
@@ -89,7 +85,7 @@ class GradiumTTS:
             elif mtype == "error":
                 raise RuntimeError(msg.get("message", "TTS error"))
 
-    async def speak(self, text: str, player: AudioPlayer) -> bool:
+    async def speak(self, text: str, player: AudioOutput) -> bool:
         await self._ensure_recv_loop(player)
         assert self._ws is not None
 
@@ -132,7 +128,7 @@ class GradiumTTS:
         self._cancel_event.set()
         self._active_req_id = None
 
-    async def run(self, speech_queue: asyncio.Queue[str], player: AudioPlayer) -> None:
+    async def run(self, speech_queue: asyncio.Queue[str], player: AudioOutput) -> None:
         player.start()
         while True:
             text = await speech_queue.get()

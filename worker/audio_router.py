@@ -1,9 +1,9 @@
-"""Audio routing between the meeting and Gemini Live.
+"""Audio routing between Google Meet and the Gradium speech pipeline.
 
 Capture side: reads what Chrome/Meet plays out (remote participants) from the
-virtual capture device, as 16 kHz mono 16-bit PCM for Gemini.
+virtual capture device, as 16 kHz mono 16-bit PCM.
 
-Playback side: plays Gemini's 24 kHz mono 16-bit PCM into the virtual mic
+Playback side: plays Gradium TTS (resampled to 24 kHz) into the virtual mic
 device that Chrome/Meet uses as its microphone.
 
 We deliberately capture only the remote participants (Chrome output), so the

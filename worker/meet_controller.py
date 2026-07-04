@@ -16,6 +16,7 @@ from pathlib import Path
 from playwright.async_api import BrowserContext, Page, TimeoutError as PWTimeout, async_playwright
 
 from config import config
+from meet_urls import normalize_meet_url
 
 logger = logging.getLogger("worker.meet")
 
@@ -93,6 +94,7 @@ class MeetController:
 
         self._page = await self._context.new_page()
         page = self._page
+        meeting_url = normalize_meet_url(meeting_url)
         logger.info("navigating to %s", meeting_url)
         await page.goto(meeting_url, wait_until="networkidle")
         await page.wait_for_timeout(2500)

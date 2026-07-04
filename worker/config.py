@@ -23,21 +23,12 @@ class Config:
     reconnect_delay_s: float = float(_get("RECONNECT_DELAY_S", "3"))
     heartbeat_interval_s: float = float(_get("HEARTBEAT_INTERVAL_S", "10"))
 
-    # Gemini Live
-    # NOTE: model IDs differ between the Gemini Developer API (AI Studio key) and
-    # Vertex AI. These defaults are Developer-API names. Run `list_models.py` to
-    # see which Live models your key supports (must support bidiGenerateContent).
-    gemini_api_key: str = _get("GEMINI_API_KEY", "")
-    gemini_model: str = _get("GEMINI_MODEL", "gemini-2.5-flash-native-audio-latest")
-    gemini_voice: str = _get("GEMINI_VOICE", "Puck")
-    # Empty = use SDK default (v1beta). Set to "v1alpha" to enable proactive audio.
-    gemini_api_version: str = _get("GEMINI_API_VERSION", "")
-    # Proactive audio (model decides when to reply) is a v1alpha native-audio
-    # feature; sending it on v1beta fails setup ("Unknown name proactivity").
-    gemini_proactive_audio: bool = _get("GEMINI_PROACTIVE_AUDIO", "false").lower() in ("1", "true", "yes")
-
-    # Agent identity / behaviour
-    agent_display_name: str = _get("AGENT_DISPLAY_NAME", "AI Project Agent")
+    # Gradium speech (STT + TTS) — see speech/ and worker/.env.example
+    gradium_api_key: str = _get("GRADIUM_API_KEY", "")
+    voice_id: str = _get("VOICE_ID", "YTpq7expH9539ERJ")
+    language: str = _get("LANGUAGE", "en")
+    buzzwords: str = _get("BUZZWORDS", "Angie,Nikki,Olaf")
+    stt_sample_rate: int = int(_get("STT_SAMPLE_RATE", "24000"))
 
     # Audio device names (as reported by the OS / sounddevice).
     # On Linux these are typically the PipeWire monitor/source names; on macOS
@@ -45,7 +36,7 @@ class Config:
     capture_device: str = _get("CAPTURE_DEVICE", "")  # what the worker hears (Meet output)
     playback_device: str = _get("PLAYBACK_DEVICE", "")  # what the worker speaks into (Meet mic)
 
-    # Audio format (Gemini Live: 16k in, 24k out, mono, 16-bit PCM)
+    # Audio format (capture: Meet output; playback: virtual mic; STT: Gradium)
     input_sample_rate: int = 16000
     output_sample_rate: int = 24000
     channels: int = 1
@@ -58,6 +49,7 @@ class Config:
     )
     chrome_channel: str = _get("CHROME_CHANNEL", "chrome")  # use installed Chrome, not bundled Chromium
     headless: bool = _get("HEADLESS", "false").lower() in ("1", "true", "yes")
+    agent_display_name: str = _get("AGENT_DISPLAY_NAME", "AI Project Agent")
 
     @property
     def input_chunk_frames(self) -> int:

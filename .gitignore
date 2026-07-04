@@ -44,3 +44,6 @@ out/
 # Worker runtime artifacts
 *.png
 chrome-profile/
+
+# Local-only dev (not part of the Meet stack)
+speech/meeting_sim.py

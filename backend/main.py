@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from meet_urls import normalize_meet_url
 from sessions import SessionStore, Status
 from ws_worker import WorkerManager
 
@@ -46,9 +47,10 @@ def worker_status() -> dict:
 
 @app.post("/sessions")
 def create_session(req: CreateSessionRequest) -> dict:
-    url = req.meeting_url.strip()
-    if not url:
-        raise HTTPException(status_code=422, detail="meeting_url is required")
+    try:
+        url = normalize_meet_url(req.meeting_url)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="meeting_url is required") from None
     session = store.create(url)
     return {"session_id": session.id, "status": session.status}
 

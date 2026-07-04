@@ -173,8 +173,7 @@ class GradiumSTT:
                 ssl=websocket_ssl_context(),
             )
         except Exception as exc:
-            print(f"ERROR: Gradium STT connection failed: {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise RuntimeError(f"Gradium STT connection failed: {exc}") from exc
 
         setup = {
             "type": "setup",
@@ -186,8 +185,8 @@ class GradiumSTT:
         await self._ws.send(json.dumps(setup))
         ready = json.loads(await self._ws.recv())
         if ready.get("type") != "ready":
-            print(f"ERROR: STT setup failed: {ready}", file=sys.stderr)
-            sys.exit(1)
+            msg = ready.get("message", ready)
+            raise RuntimeError(f"Gradium STT setup failed: {msg}")
         logger.info("[%s] STT live (sample_rate=%s)", _ts(), ready.get("sample_rate"))
 
     async def run_sender(self, audio_queue: asyncio.Queue[bytes]) -> None:
@@ -212,8 +211,7 @@ class GradiumSTT:
             try:
                 raw = await self._ws.recv()
             except websockets.ConnectionClosed as exc:
-                print(f"ERROR: STT connection lost: {exc}", file=sys.stderr)
-                sys.exit(1)
+                raise RuntimeError(f"Gradium STT connection lost: {exc}") from exc
 
             msg = json.loads(raw)
             mtype = msg.get("type")
@@ -252,8 +250,7 @@ class GradiumSTT:
                     self._pending_flush.set_result(True)
 
             elif mtype == "error":
-                print(f"ERROR: STT: {msg.get('message')}", file=sys.stderr)
-                sys.exit(1)
+                raise RuntimeError(f"Gradium STT error: {msg.get('message')}")
 
     async def _emit_final(
         self,

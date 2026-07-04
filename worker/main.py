@@ -1,24 +1,36 @@
-"""Worker entrypoint: connects to the backend and runs the join/hear/speak loop.
+"""Worker entrypoint: joins Google Meet and runs the Gradium speech agent pipeline.
 
 Sequence on JOIN_MEETING:
-  1. Launch Chrome (persistent agent profile) and join the Meet.
-  2. Start the audio router (capture Meet output, play into Meet mic).
-  3. Open a Gemini Live session and bridge audio both ways.
-Status is reported to the backend at each step.
+  1. Launch Chrome and join the Meet.
+  2. Start virtual audio routing (capture Meet output, play into Meet mic).
+  3. Stream captured audio → Gradium STT → meeting-router → TTS → virtual mic.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+from pathlib import Path
 from typing import Any
+
+# Repo root on path so worker can import speech.*
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from audio_router import AudioRouter
 from config import config
-from gemini_live_client import GeminiLiveClient
 from meet_controller import MeetController
+from speech_bridge import MeetAudioOutput, meet_capture_to_stt
 from status import StatusReporter, WorkerState
 from websocket_client import BackendClient
+
+from speech.meeting_session import (
+    MeetingSpeechSession,
+    speech_config_from_env,
+    verify_gradium,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,7 +65,35 @@ class Worker:
             finally:
                 self._busy = False
 
+    async def _on_speech_state(self, state: str, message: str | None) -> None:
+        mapping = {
+            "listening": WorkerState.LISTENING,
+            "thinking": WorkerState.THINKING,
+            "speaking": WorkerState.SPEAKING,
+        }
+        target = mapping.get(state)
+        if target:
+            await self._reporter.set(target, message)
+
     async def _run_session(self, meeting_url: str) -> None:
+        cfg = speech_config_from_env()
+
+        output = MeetAudioOutput(self._audio)
+        session = MeetingSpeechSession(cfg, output, on_state=self._on_speech_state)
+
+        # Connect Gradium before Chrome — don't join Meet with a bad API key
+        await self._reporter.set(WorkerState.JOINING_MEETING, "Connecting to Gradium STT/TTS")
+        try:
+            await session.stt.connect()
+            await session.tts.connect()
+        except RuntimeError as exc:
+            msg = str(exc)
+            if "Invalid or expired API key" in msg or "STT setup failed" in msg:
+                raise RuntimeError(
+                    "Gradium API key rejected. Update GRADIUM_API_KEY in worker/.env. "
+                ) from exc
+            raise
+
         await self._reporter.set(WorkerState.JOINING_MEETING, "Opening Chrome and joining Meet")
         await self._meet.start()
         await self._meet.join(meeting_url)
@@ -65,26 +105,16 @@ class Worker:
 
         self._audio.start()
         await self._reporter.set(WorkerState.LISTENING, "Listening to the meeting")
+        session.log_banner("Google Meet Agent")
 
-        gemini = GeminiLiveClient(
-            on_audio=self._audio.play,
-            on_state=self._on_gemini_state,
-            on_interrupt=self._audio.clear_playback,
+        feeder = asyncio.create_task(
+            meet_capture_to_stt(self._audio, session.stt_audio_queue, session.guard)
         )
         try:
-            await gemini.run(self._audio.capture_chunks())
+            await session.run_core(feeder, connect=False)
         finally:
             self._audio.stop()
-
-    async def _on_gemini_state(self, state: str) -> None:
-        mapping = {
-            "listening": WorkerState.LISTENING,
-            "speaking": WorkerState.SPEAKING,
-            "thinking": WorkerState.THINKING,
-        }
-        target = mapping.get(state)
-        if target and target != self._reporter.state:
-            await self._reporter.set(target)
+            await self._meet.stop()
 
     async def run(self) -> None:
         logger.info("worker starting; backend=%s", config.backend_ws_url)
@@ -92,6 +122,14 @@ class Worker:
 
 
 def main() -> None:
+    try:
+        cfg = speech_config_from_env()
+        asyncio.run(verify_gradium(cfg))
+        logger.info("Gradium API key OK")
+    except RuntimeError as exc:
+        logger.error("%s", exc)
+        sys.exit(1)
+
     try:
         asyncio.run(Worker().run())
     except KeyboardInterrupt:
