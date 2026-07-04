@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# IDE / editor
+.idea/
+.vscode/
+.cursor/
+
+# Hackathon docs (local only)
+*.pdf
+
+# Logs & temp
+*.log
+.tmp/
