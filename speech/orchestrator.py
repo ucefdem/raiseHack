@@ -8,6 +8,8 @@ import os
 import time
 
 from speech.agent_context import AgentRequest, AgentResponse
+from speech.cursor_cloud_client import invoke_cursor_agent
+from speech.meet_link import shared_meet_url
 from speech.olaf_client import OlafClient
 from speech.router_heuristic import STUB_REPLIES, is_direct_agent_call
 from speech.speech_editor import SpeechEditorClient
@@ -135,6 +137,55 @@ class OrchestratorClient:
         self._speech_editor = SpeechEditorClient()
         self._olaf = OlafClient()
 
+    async def _invoke_cloud_router(self, request: AgentRequest) -> AgentResponse:
+        """Call the meeting-router Cursor Cloud Agent as a tool with try/except.
+
+        Failures **never** propagate to the audio loop: we degrade to a
+        keep-listening response and log the error. This is the "text request to
+        the Cursor Cloud Agents API" the voice loop uses for every wake word.
+        """
+        meet_url = shared_meet_url()
+        prompt = (
+            "Read and follow agents/meeting-router/SKILL.md.\n\n"
+            f"AgentRequest:\n{request.to_json()}\n\n"
+            f"Shared Meet URL for every agent: {meet_url or '(not configured)'}\n\n"
+            "Return the router JSON (action, routed_to, response_text, reason) only."
+        )
+        try:
+            result = invoke_cursor_agent(
+                prompt,
+                auto_create_pr=False,
+                repository=os.getenv("CURSOR_AGENTS_REPOSITORY") or None,
+            )
+        except Exception as exc:  # noqa: BLE001 — defensive: never crash Meet
+            logger.exception("cursor cloud router raised unexpectedly")
+            return AgentResponse(
+                text="",
+                agent_name=AGENT_MAP["meeting-router"],
+                should_respond=False,
+                reason=f"cloud router raised: {exc}",
+            )
+
+        if not result.ok:
+            logger.warning("cursor cloud router failed: %s", result.error)
+            return AgentResponse(
+                text="",
+                agent_name=AGENT_MAP["meeting-router"],
+                should_respond=False,
+                reason=f"cloud router error: {result.error}",
+            )
+
+        try:
+            return parse_router_response(result.text, request)
+        except (ValueError, json.JSONDecodeError) as exc:
+            logger.warning("cursor cloud router returned unparseable JSON: %s", exc)
+            return AgentResponse(
+                text="",
+                agent_name=AGENT_MAP["meeting-router"],
+                should_respond=False,
+                reason=f"cloud router bad JSON: {exc}",
+            )
+
     async def _dispatch_specialist(
         self, request: AgentRequest, response: AgentResponse
     ) -> AgentResponse:
@@ -153,15 +204,7 @@ class OrchestratorClient:
 
         mode = _router_mode()
         if mode == "cloud":
-            # TODO (teammate): spawn / resume meeting-router cloud agent, pass request.to_json(),
-            # then: response = parse_router_response(cloud_agent_output, request)
-            response = AgentResponse(
-                text="",
-                agent_name=AGENT_MAP["meeting-router"],
-                routed_to=None,
-                should_respond=False,
-                reason="ROUTER_MODE=cloud but cloud agent not wired yet",
-            )
+            response = await self._invoke_cloud_router(request)
         else:
             response = _stub_response(request)
 

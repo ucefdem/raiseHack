@@ -9,6 +9,8 @@ import time
 from dataclasses import dataclass
 
 from speech.agent_context import AgentRequest, AgentResponse
+from speech.cursor_cloud_client import invoke_cursor_agent
+from speech.meet_link import shared_meet_url
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +59,7 @@ def parse_olaf_response(raw: str, fallback_text: str = "") -> OlafResult:
 
 
 def _build_olaf_prompt(request: AgentRequest) -> str:
-    meet_url = os.getenv("GOOGLE_MEET_URL", "").strip()
+    meet_url = shared_meet_url()
     return (
         f"Read and follow {OLAF_SKILL}.\n\n"
         f"AgentRequest:\n{request.to_json()}\n\n"
@@ -86,12 +88,34 @@ class OlafClient:
         if not api_key:
             return self._failed(request, "OLAF_MODE=cloud but CURSOR_API_KEY not set")
 
-        # TODO: wire cursor-sdk when ready on feature/agents branch
-        # from cursor_sdk import Agent, AgentOptions, CloudAgentOptions
-        # result = Agent.prompt(_build_olaf_prompt(request), AgentOptions(...))
-        # parsed = parse_olaf_response(result.result, "")
-        print(f"[{_ts()}] olaf: cloud spawn not wired yet — install cursor-sdk and uncomment")
-        return self._execute_stub(request)
+        try:
+            result = invoke_cursor_agent(
+                _build_olaf_prompt(request),
+                api_key=api_key,
+                auto_create_pr=False,
+            )
+        except Exception as exc:  # noqa: BLE001 — never crash the Meet loop
+            logger.exception("olaf cloud spawn raised unexpectedly")
+            return self._failed(request, f"olaf cloud raised: {exc}")
+
+        if not result.ok:
+            print(f"[{_ts()}] olaf: cloud call failed — {result.error}")
+            return self._failed(request, f"olaf cloud error: {result.error}")
+
+        try:
+            parsed = parse_olaf_response(result.text, fallback_text="")
+        except (ValueError, json.JSONDecodeError) as exc:
+            logger.warning("olaf cloud returned unparseable JSON: %s", exc)
+            return self._failed(request, f"olaf bad JSON: {exc}")
+
+        print(f"[{_ts()}] olaf (cloud): status={parsed.status} action={parsed.action}")
+        return AgentResponse(
+            text=parsed.response_text,
+            agent_name="Computer-Use Agent (Olaf)",
+            routed_to="olaf",
+            should_respond=parsed.status == "completed" and bool(parsed.response_text),
+            reason=f"olaf cloud: {parsed.action} ({parsed.status})",
+        )
 
     def _execute_stub(self, request: AgentRequest) -> AgentResponse:
         utterance = request.utterance.lower()

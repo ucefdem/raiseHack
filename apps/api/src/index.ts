@@ -18,6 +18,15 @@ app.use(
   }),
 );
 
+/**
+ * Shared Google Meet room used by every agent in the office.
+ * Precedence: SHARED_MEET_URL > NEXT_PUBLIC_SHARED_MEET_URL > fallback.
+ */
+const SHARED_MEET_URL =
+  process.env.SHARED_MEET_URL ??
+  process.env.NEXT_PUBLIC_SHARED_MEET_URL ??
+  "https://meet.google.com/lookup/raisehack-office";
+
 const seedDepartments: Department[] = [
   {
     id: "dept-engineering",
@@ -25,7 +34,7 @@ const seedDepartments: Department[] = [
     description: "Frontend and backend specialists.",
     floor: 1,
     zone: { position: [0, 0.18, 0], size: [5.65, 0.25, 5.65], color: "#3b82f6" },
-    meetUrl: "https://meet.google.com/lookup/engineering-room",
+    meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-frontend", "agent-backend"],
   },
   {
@@ -34,7 +43,7 @@ const seedDepartments: Department[] = [
     description: "DevOps and security teams.",
     floor: 2,
     zone: { position: [0, 3.38, 0], size: [5.65, 0.25, 5.65], color: "#10b981" },
-    meetUrl: "https://meet.google.com/lookup/platform-room",
+    meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-devops", "agent-security"],
   },
   {
@@ -43,7 +52,7 @@ const seedDepartments: Department[] = [
     description: "QA and product strategy.",
     floor: 3,
     zone: { position: [0, 6.58, 0], size: [5.65, 0.25, 5.65], color: "#f59e0b" },
-    meetUrl: "https://meet.google.com/lookup/product-room",
+    meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-qa", "agent-product"],
   },
 ];
@@ -106,6 +115,8 @@ const seedAgents: Agent[] = [
 ];
 
 app.get("/health", (c) => c.json({ ok: true }));
+
+app.get("/api/meet-url", (c) => c.json({ url: SHARED_MEET_URL }));
 
 app.get("/api/departments", (c) => c.json(seedDepartments));
 

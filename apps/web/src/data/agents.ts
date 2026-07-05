@@ -1,4 +1,5 @@
 import type { Agent } from "@raisehack/shared";
+import { SHARED_MEET_URL } from "@/lib/meetLink";
 
 export const agents: Agent[] = [
   {
@@ -10,7 +11,7 @@ export const agents: Agent[] = [
       "You are a senior frontend engineer focused on React, UX, and performance.",
     status: "online",
     createdBy: { name: "Youssef Dem", role: "Engineering Lead", team: "Engineering" },
-    meetUrl: "https://meet.google.com/lookup/alex-chen-agent",
+    meetUrl: SHARED_MEET_URL,
     workSurface: "browser",
   },
   {
@@ -22,7 +23,7 @@ export const agents: Agent[] = [
       "You are a backend engineer specializing in APIs, databases, and system design.",
     status: "online",
     createdBy: { name: "Youssef Dem", role: "Engineering Lead", team: "Engineering" },
-    meetUrl: "https://meet.google.com/lookup/sam-rivera-agent",
+    meetUrl: SHARED_MEET_URL,
     workSurface: "ide",
     error: {
       message: "Integration test suite failed on chat-service PR #142",
@@ -39,7 +40,7 @@ export const agents: Agent[] = [
       "You are a DevOps engineer focused on CI/CD, infrastructure, and reliability.",
     status: "busy",
     createdBy: { name: "Morgan Blake", role: "Platform Director", team: "Platform" },
-    meetUrl: "https://meet.google.com/lookup/jordan-lee-agent",
+    meetUrl: SHARED_MEET_URL,
     workSurface: "terminal",
     error: {
       message: "Staging deploy pipeline stuck — rollback recommended",
@@ -56,7 +57,7 @@ export const agents: Agent[] = [
       "You are a security engineer focused on threat modeling and secure defaults.",
     status: "online",
     createdBy: { name: "Morgan Blake", role: "Platform Director", team: "Platform" },
-    meetUrl: "https://meet.google.com/lookup/morgan-blake-agent",
+    meetUrl: SHARED_MEET_URL,
     workSurface: "browser",
   },
   {
@@ -68,7 +69,7 @@ export const agents: Agent[] = [
       "You are a QA engineer focused on test strategy, edge cases, and quality gates.",
     status: "online",
     createdBy: { name: "Riley Morgan", role: "Head of Product", team: "Product" },
-    meetUrl: "https://meet.google.com/lookup/taylor-kim-agent",
+    meetUrl: SHARED_MEET_URL,
     workSurface: "jira",
   },
   {
@@ -80,7 +81,7 @@ export const agents: Agent[] = [
       "You are a product manager focused on user needs, scope, and prioritization.",
     status: "offline",
     createdBy: { name: "Victoria Nash", role: "CEO", team: "Executive" },
-    meetUrl: "https://meet.google.com/lookup/riley-morgan-agent",
+    meetUrl: SHARED_MEET_URL,
     workSurface: "browser",
   },
   {
@@ -92,7 +93,7 @@ export const agents: Agent[] = [
       "You are an enterprise AE focused on pipeline, demos, and customer outcomes.",
     status: "busy",
     createdBy: { name: "Victoria Nash", role: "CEO", team: "Executive" },
-    meetUrl: "https://meet.google.com/lookup/casey-brooks-agent",
+    meetUrl: SHARED_MEET_URL,
     workSurface: "browser",
   },
   {
@@ -104,7 +105,7 @@ export const agents: Agent[] = [
       "You are the CEO agent — company strategy, investor updates, and cross-team alignment.",
     status: "online",
     createdBy: { name: "Victoria Nash", role: "CEO", team: "Executive" },
-    meetUrl: "https://meet.google.com/lookup/victoria-nash-agent",
+    meetUrl: SHARED_MEET_URL,
     workSurface: "none",
   },
 ];

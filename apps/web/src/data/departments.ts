@@ -1,5 +1,6 @@
 import type { Department } from "@raisehack/shared";
 import { makeDepartmentZone } from "@/features/scene/buildingConfig";
+import { SHARED_MEET_URL } from "@/lib/meetLink";
 
 export const departments: Department[] = [
   {
@@ -8,7 +9,7 @@ export const departments: Department[] = [
     description: "Frontend and backend specialists building the product.",
     floor: 1,
     zone: makeDepartmentZone(1, "#059669"),
-    meetUrl: "https://meet.google.com/lookup/engineering-room",
+    meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-frontend", "agent-backend"],
     missionPlan: {
       mission: "Ship reliable product increments every sprint.",
@@ -30,7 +31,7 @@ export const departments: Department[] = [
     description: "DevOps and security teams keeping systems safe and running.",
     floor: 2,
     zone: makeDepartmentZone(2, "#2563eb"),
-    meetUrl: "https://meet.google.com/lookup/platform-room",
+    meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-devops", "agent-security"],
     missionPlan: {
       mission: "Keep production healthy and secure at scale.",
@@ -51,7 +52,7 @@ export const departments: Department[] = [
     description: "Quality assurance and product strategy for user outcomes.",
     floor: 2,
     zone: makeDepartmentZone(2, "#8b5cf6"),
-    meetUrl: "https://meet.google.com/lookup/product-room",
+    meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-qa", "agent-product"],
     missionPlan: {
       mission: "Validate what we build matches what users need.",
@@ -72,7 +73,7 @@ export const departments: Department[] = [
     description: "Enterprise pipeline, demos, and customer success handoffs.",
     floor: 3,
     zone: makeDepartmentZone(3, "#f59e0b"),
-    meetUrl: "https://meet.google.com/lookup/sales-room",
+    meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-sales"],
     missionPlan: {
       mission: "Grow ARR through qualified enterprise deals.",
@@ -93,7 +94,7 @@ export const departments: Department[] = [
     description: "CEO office — strategy, investors, and company-wide alignment.",
     floor: 3,
     zone: makeDepartmentZone(3, "#dc2626"),
-    meetUrl: "https://meet.google.com/lookup/executive-room",
+    meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-ceo"],
     missionPlan: {
       mission: "Align the company on vision, metrics, and execution.",
