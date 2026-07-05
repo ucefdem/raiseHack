@@ -1,9 +1,0 @@
-@import "tailwindcss";
-
-:root {
-  color-scheme: dark;
-}
-
-body {
-  background: radial-gradient(1200px 800px at 50% -10%, #1e293b 0%, #0b1120 55%, #060912 100%);
-}
