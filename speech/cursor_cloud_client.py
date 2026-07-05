@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_API_URL = "https://api.cursor.com/v1/agents"
-DEFAULT_MODEL = "composer-2"
+DEFAULT_MODEL = "composer-2.5"
 
 
 @dataclass
