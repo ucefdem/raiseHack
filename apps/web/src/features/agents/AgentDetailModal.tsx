@@ -9,6 +9,7 @@ import { getActivityByAgentId } from "@/data/agentActivities";
 import { useAgentTracking } from "@/features/scene/AgentTrackingProvider";
 import { useSelection } from "@/features/selection/SelectionProvider";
 import { FloorPlanPreview } from "@/features/departments/FloorPlanPreview";
+import { getVoiceAgent, getAngieSubagents } from "@/data/voiceAgents";
 import { meetAppUrl } from "@/lib/meetAppUrl";
 
 type PanelTab = "overview" | "structure" | "activity";
@@ -111,6 +112,9 @@ export function AgentDetailModal() {
   const activity = getActivityByAgentId(selectedAgent.id);
   const departmentAgents = getAgentsByDepartment(selectedDepartment.id);
   const accent = selectedDepartment.zone.color ?? "#4ade80";
+  const voiceAgent = selectedAgent.voiceAgentId
+    ? getVoiceAgent(selectedAgent.voiceAgentId)
+    : null;
 
   const close = () => clearSelection();
 
@@ -291,6 +295,43 @@ export function AgentDetailModal() {
                 {selectedAgent.personaPrompt}
               </p>
             </section>
+
+            {voiceAgent && (
+              <section
+                className="rounded-xl border p-4"
+                style={{ borderColor: `${accent}33`, background: `${accent}0d` }}
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
+                  Voice agent
+                </p>
+                <p className="mt-2 text-sm font-medium text-white/85">
+                  {voiceAgent.title} · wake word &ldquo;{voiceAgent.wakeWord}&rdquo;
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-white/50">
+                  {voiceAgent.description}
+                </p>
+                {voiceAgent.id === "angie" && (
+                  <div className="mt-3 space-y-2 border-t border-white/8 pt-3">
+                    <p className="text-[10px] uppercase tracking-wider text-white/35">
+                      Subagents
+                    </p>
+                    {getAngieSubagents().map((sub) => (
+                      <div key={sub.id} className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+                        <p className="text-xs font-medium text-white/75">
+                          {sub.name} · {sub.title}
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-white/45">
+                          {sub.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 font-mono text-[10px] text-white/35">
+                  {voiceAgent.skillPath}
+                </p>
+              </section>
+            )}
           </div>
         )}
       </div>
@@ -306,6 +347,7 @@ export function AgentDetailModal() {
               href={meetAppUrl({
                 url: selectedAgent.meetUrl,
                 agent: selectedAgent.name,
+                voiceAgent: selectedAgent.voiceAgentId,
               })}
               className="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium text-slate-900 transition hover:opacity-90"
               style={{ background: accent }}

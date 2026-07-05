@@ -36,9 +36,14 @@ class SpeechConfig:
     language: str = "en"
     buzzwords: str | None = None
     speak_response: bool = True
+    active_voice_agent: str | None = None
 
 
-def speech_config_from_env() -> SpeechConfig:
+def speech_config_from_env(
+    *,
+    buzzwords: str | None = None,
+    active_voice_agent: str | None = None,
+) -> SpeechConfig:
     key = os.getenv("GRADIUM_API_KEY", "").strip()
     placeholders = {"", "gd_your_key_here", "your_key_here"}
     if key in placeholders:
@@ -46,12 +51,14 @@ def speech_config_from_env() -> SpeechConfig:
             "GRADIUM_API_KEY is missing or still the .env.example placeholder. "
             "Set your real key in worker/.env."
         )
+    env_buzzwords = os.getenv("BUZZWORDS", "").strip() or None
     return SpeechConfig(
         gradium_key=key,
         voice_id=os.getenv("VOICE_ID", DEFAULT_VOICE_ID).strip(),
         language=os.getenv("LANGUAGE", "en").strip(),
-        buzzwords=os.getenv("BUZZWORDS", "").strip() or None,
+        buzzwords=buzzwords if buzzwords is not None else env_buzzwords,
         speak_response=os.getenv("SPEAK_RESPONSE", "1").strip() != "0",
+        active_voice_agent=active_voice_agent,
     )
 
 
@@ -101,7 +108,7 @@ class MeetingSpeechSession:
         self.partial_scheduler = PartialTriggerScheduler.from_env()
         self.stt = GradiumSTT(api_key=cfg.gradium_key, language=cfg.language)
         self.tts = GradiumTTS(api_key=cfg.gradium_key, voice_id=cfg.voice_id)
-        self.orchestrator = OrchestratorClient()
+        self.orchestrator = OrchestratorClient(active_voice_agent=cfg.active_voice_agent)
         self.triggers = BuzzwordTrigger.from_env(cfg.buzzwords)
         self.speech_queue: asyncio.Queue[str] = asyncio.Queue()
         self.stt_audio_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=200)
@@ -113,6 +120,8 @@ class MeetingSpeechSession:
     def log_banner(self, mode: str) -> None:
         print(f"[{_ts()}] === {mode} ===")
         print(f"[{_ts()}] Wake words: {', '.join(self.triggers.buzzwords)}")
+        if self.cfg.active_voice_agent:
+            print(f"[{_ts()}] Active voice agent: {self.cfg.active_voice_agent}")
         print(f"[{_ts()}] Router: {router_mode()}")
         print(f"[{_ts()}] Agents respond after [final] + {self.scheduler.delay_s:.1f}s silence")
         if partial_trigger_enabled():

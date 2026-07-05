@@ -1,3 +1,5 @@
+import type { VoiceAgentId } from "./voiceAgent";
+
 export type AgentRole =
   | "frontend"
   | "backend"
@@ -8,7 +10,8 @@ export type AgentRole =
   | "product"
   | "data"
   | "sales"
-  | "executive";
+  | "executive"
+  | "orchestrator";
 
 export type AgentStatus = "online" | "busy" | "offline";
 
@@ -42,6 +45,8 @@ export interface Agent {
   workSurface?: AgentWorkSurface;
   /** When set, agent needs human review */
   error?: AgentError;
+  /** When set, Meet deploy locks to this voice agent (angie / nikki / olaf). */
+  voiceAgentId?: VoiceAgentId;
   tools?: string[];
   availability?: string;
 }

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SHARED_MEET_URL } from "@/lib/meetLink";
+import { getVoiceAgent, getAngieSubagents } from "@/data/voiceAgents";
+import type { VoiceAgentId } from "@raisehack/shared";
 import {
   MEET_STATUS_STYLES,
   normalizeMeetUrl,
@@ -16,6 +18,8 @@ const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "/api/backend";
 export function MeetDeployPanel() {
   const searchParams = useSearchParams();
   const agentName = searchParams.get("agent");
+  const voiceAgentParam = searchParams.get("voiceAgent") as VoiceAgentId | null;
+  const voiceAgent = voiceAgentParam ? getVoiceAgent(voiceAgentParam) : null;
   const initialUrl = searchParams.get("url") ?? SHARED_MEET_URL;
 
   const [meetingUrl, setMeetingUrl] = useState(initialUrl);
@@ -74,7 +78,10 @@ export function MeetDeployPanel() {
       const createRes = await fetch(`${BACKEND}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meeting_url: normalizeMeetUrl(meetingUrl) }),
+        body: JSON.stringify({
+          meeting_url: normalizeMeetUrl(meetingUrl),
+          voice_agent_id: voiceAgent?.id ?? null,
+        }),
       });
       if (!createRes.ok) throw new Error("Failed to create session");
       const created = await createRes.json();
@@ -117,13 +124,30 @@ export function MeetDeployPanel() {
             {agentName ? `Deploy ${agentName} to Meet` : "An AI teammate with its own computer."}
           </h1>
           <p className="mt-3 text-slate-400">
-            {agentName
-              ? `Send ${agentName} into the meeting to listen and respond.`
-              : "Paste a Google Meet link and the agent will join, listen, and speak."}
+            {voiceAgent?.id === "angie"
+              ? "Angie joins as your meeting manager. She delegates to Nikki (sales) and Olaf (computer-use) when you need specialist work."
+              : agentName
+                ? `Send ${agentName} into the meeting to listen and respond.`
+                : "Paste a Google Meet link and the agent will join, listen, and speak."}
           </p>
         </header>
 
         <section className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
+          {voiceAgent?.id === "angie" && (
+            <div className="mb-5 rounded-lg border border-sky-500/25 bg-sky-500/10 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wider text-sky-300">
+                Managed by Angie
+              </p>
+              <p className="mt-1 text-sm text-slate-300">{voiceAgent.description}</p>
+              <ul className="mt-3 space-y-2">
+                {getAngieSubagents().map((sub) => (
+                  <li key={sub.id} className="text-xs text-slate-400">
+                    <span className="font-medium text-slate-300">{sub.name}</span> — {sub.description}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="mb-5 flex items-center gap-2">
             <span
               className={`inline-block h-2.5 w-2.5 rounded-full ${

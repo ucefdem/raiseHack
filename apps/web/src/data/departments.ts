@@ -26,6 +26,27 @@ export const departments: Department[] = [
     },
   },
   {
+    id: "dept-ai-command",
+    name: "AI Command",
+    description: "Angie manages live meeting agents and delegates to Nikki and Olaf.",
+    floor: 1,
+    zone: makeDepartmentZone(1, "#0ea5e9"),
+    meetUrl: SHARED_MEET_URL,
+    agentIds: ["agent-angie"],
+    missionPlan: {
+      mission: "Deploy Angie as the meeting manager — she routes work to her subagents.",
+      goals: [
+        "Deploy Angie to Google Meet as the single voice interface",
+        "Delegate sales and Jira work to Nikki on demand",
+        "Spin up Olaf for screen-share and computer-use tasks",
+      ],
+      calendar: [
+        { id: "ai-1", title: "Voice loop soak test", date: "Daily 09:00", status: "in-progress" },
+        { id: "ai-2", title: "Orchestrator routing review", date: "Wed 16:00", status: "planned" },
+      ],
+    },
+  },
+  {
     id: "dept-platform",
     name: "Platform & Security",
     description: "DevOps and security teams keeping systems safe and running.",

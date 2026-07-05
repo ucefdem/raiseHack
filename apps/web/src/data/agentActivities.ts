@@ -2,6 +2,13 @@ import type { AgentActivity } from "@raisehack/shared";
 
 export const agentActivities: AgentActivity[] = [
   {
+    agentId: "agent-angie",
+    task: "Managing live meeting — Nikki on Jira updates, Olaf prepping a dashboard demo",
+    location: "Command desk · Floor 1",
+    mood: "Coordinating",
+    progress: 80,
+  },
+  {
     agentId: "agent-frontend",
     task: "Polishing the dashboard UI components",
     location: "Design desk · Floor 1",

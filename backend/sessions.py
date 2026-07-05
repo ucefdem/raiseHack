@@ -32,6 +32,7 @@ class Status(str, Enum):
 class Session:
     id: str
     meeting_url: str
+    voice_agent_id: str | None = None
     status: str = Status.CREATED.value
     last_event: str = "Session created"
     created_at: float = field(default_factory=time.time)
@@ -41,6 +42,7 @@ class Session:
         return {
             "session_id": self.id,
             "meeting_url": self.meeting_url,
+            "voice_agent_id": self.voice_agent_id,
             "status": self.status,
             "last_event": self.last_event,
             "created_at": self.created_at,
@@ -55,8 +57,12 @@ class SessionStore:
         self._sessions: dict[str, Session] = {}
         self._lock = Lock()
 
-    def create(self, meeting_url: str) -> Session:
-        session = Session(id=f"sess_{uuid.uuid4().hex[:8]}", meeting_url=meeting_url)
+    def create(self, meeting_url: str, voice_agent_id: str | None = None) -> Session:
+        session = Session(
+            id=f"sess_{uuid.uuid4().hex[:8]}",
+            meeting_url=meeting_url,
+            voice_agent_id=voice_agent_id,
+        )
         with self._lock:
             self._sessions[session.id] = session
         return session

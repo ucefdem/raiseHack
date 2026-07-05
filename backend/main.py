@@ -33,6 +33,7 @@ worker = WorkerManager(store)
 
 class CreateSessionRequest(BaseModel):
     meeting_url: str
+    voice_agent_id: str | None = None
 
 
 @app.get("/health")
@@ -51,7 +52,15 @@ def create_session(req: CreateSessionRequest) -> dict:
         url = normalize_meet_url(req.meeting_url)
     except ValueError:
         raise HTTPException(status_code=422, detail="meeting_url is required") from None
-    session = store.create(url)
+    voice_agent_id = req.voice_agent_id
+    if voice_agent_id is not None:
+        voice_agent_id = voice_agent_id.strip().lower()
+        if voice_agent_id not in {"angie"}:
+            raise HTTPException(
+                status_code=422,
+                detail="voice_agent_id must be angie (Nikki and Olaf are subagents)",
+            ) from None
+    session = store.create(url, voice_agent_id=voice_agent_id)
     return {"session_id": session.id, "status": session.status}
 
 
@@ -80,6 +89,7 @@ async def start_session(session_id: str) -> dict:
             "type": "JOIN_MEETING",
             "session_id": session.id,
             "meeting_url": session.meeting_url,
+            "voice_agent_id": session.voice_agent_id,
         }
     )
     if not sent:

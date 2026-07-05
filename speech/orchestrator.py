@@ -82,10 +82,16 @@ def parse_router_response(raw: str, request: AgentRequest) -> AgentResponse:
     )
 
 
-def _heuristic_stub_response(request: AgentRequest) -> AgentResponse:
+def _heuristic_stub_response(
+    request: AgentRequest, active_voice_agent: str | None = None
+) -> AgentResponse:
     """Local dev: approximate meeting-router listen vs respond."""
     words = request.mentioned_wake_words or [request.wake_word]
     direct, routed_to = is_direct_agent_call(request.utterance, words)
+
+    if active_voice_agent and active_voice_agent != "angie":
+        routed_to = active_voice_agent
+        direct = True
 
     if not direct or not routed_to:
         return AgentResponse(
@@ -116,11 +122,11 @@ def _passthrough_listen_stub(request: AgentRequest) -> AgentResponse:
     )
 
 
-def _stub_response(request: AgentRequest) -> AgentResponse:
+def _stub_response(request: AgentRequest, active_voice_agent: str | None = None) -> AgentResponse:
     mode = _router_mode()
     if mode == "listen":
         return _passthrough_listen_stub(request)
-    return _heuristic_stub_response(request)
+    return _heuristic_stub_response(request, active_voice_agent)
 
 
 class OrchestratorClient:
@@ -133,7 +139,8 @@ class OrchestratorClient:
     All spoken replies pass through SpeechEditorClient before TTS.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, active_voice_agent: str | None = None) -> None:
+        self._active_voice_agent = (active_voice_agent or "").strip().lower() or None
         self._speech_editor = SpeechEditorClient()
         self._olaf = OlafClient()
 
@@ -206,7 +213,7 @@ class OrchestratorClient:
         if mode == "cloud":
             response = await self._invoke_cloud_router(request)
         else:
-            response = _stub_response(request)
+            response = _stub_response(request, self._active_voice_agent)
 
         if response.should_respond:
             response = await self._dispatch_specialist(request, response)

@@ -1,3 +1,4 @@
+export * from "./types/voiceAgent";
 export * from "./types/agent";
 export * from "./types/department";
 export * from "./types/presence";

@@ -3,6 +3,19 @@ import { SHARED_MEET_URL } from "@/lib/meetLink";
 
 export const agents: Agent[] = [
   {
+    id: "agent-angie",
+    name: "Angie",
+    role: "orchestrator",
+    departmentId: "dept-ai-command",
+    personaPrompt:
+      "You are Angie, the meeting manager. You listen, coordinate the call, and delegate to your subagents Nikki (sales) and Olaf (computer-use) when specialist work is needed.",
+    status: "online",
+    createdBy: { name: "AI Command", role: "Manager", team: "Voice Agents" },
+    meetUrl: SHARED_MEET_URL,
+    voiceAgentId: "angie",
+    workSurface: "browser",
+  },
+  {
     id: "agent-frontend",
     name: "Alex Chen",
     role: "frontend",

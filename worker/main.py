@@ -58,7 +58,10 @@ class Worker:
             self._busy = True
             self._reporter.session_id = message.get("session_id")
             try:
-                await self._run_session(message["meeting_url"])
+                await self._run_session(
+                    message["meeting_url"],
+                    voice_agent_id=message.get("voice_agent_id"),
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.exception("session failed")
                 await self._reporter.set(WorkerState.ERROR, f"Session failed: {exc}")
@@ -75,8 +78,21 @@ class Worker:
         if target:
             await self._reporter.set(target, message)
 
-    async def _run_session(self, meeting_url: str) -> None:
-        cfg = speech_config_from_env()
+    async def _run_session(
+        self, meeting_url: str, voice_agent_id: str | None = None
+    ) -> None:
+        active = (voice_agent_id or "").strip().lower() or None
+        buzzwords = None
+        if active and active != "angie":
+            buzzwords = active.capitalize()
+            logger.info("session locked to voice agent: %s", active)
+        elif active == "angie":
+            logger.info("session managed by Angie (delegates to Nikki/Olaf)")
+
+        cfg = speech_config_from_env(
+            buzzwords=buzzwords,
+            active_voice_agent=active,
+        )
 
         output = MeetAudioOutput(self._audio)
         session = MeetingSpeechSession(cfg, output, on_state=self._on_speech_state)
