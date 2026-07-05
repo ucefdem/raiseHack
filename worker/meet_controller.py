@@ -20,11 +20,21 @@ from meet_urls import normalize_meet_url
 
 logger = logging.getLogger("worker.meet")
 
+JOIN_BUTTON_NAMES = ["Join now", "Ask to join", "Join", "Ask to join anyway"]
 JOIN_SELECTORS = [
     'button:has-text("Join now")',
     'button:has-text("Ask to join")',
     '[aria-label="Join now"]',
+    '[aria-label="Ask to join"]',
     'span:has-text("Join now")',
+    'span:has-text("Ask to join")',
+]
+# Lobby indicators — Meet took our click and is now waiting for the host to admit.
+LOBBY_SELECTORS = [
+    'text=Asking to join',
+    'text=Please wait',
+    'text=meeting host',
+    'text=admitted',
 ]
 NAME_SELECTORS = [
     'input[aria-label="Your name"]',
@@ -105,11 +115,55 @@ class MeetController:
         # Camera off; keep mic on so the virtual device feeds Meet.
         await self._click_first(page, CAMERA_OFF_SELECTORS, timeout=2000)
 
-        if not await self._click_first(page, JOIN_SELECTORS, timeout=8000):
-            await self._screenshot("join_failed")
-            raise RuntimeError("could not find a Join button on the Meet page")
+        # Meet's pre-join screen sometimes needs a beat before the primary CTA
+        # (Join now / Ask to join) becomes clickable.
+        await page.wait_for_timeout(1500)
 
-    async def wait_until_in_meeting(self, timeout_ms: int = 60000) -> bool:
+        if await self._click_join_button(page):
+            return
+        # As a last resort, keyboard tab-and-enter often triggers the primary CTA.
+        try:
+            await page.keyboard.press("Enter")
+            await page.wait_for_timeout(1500)
+            if await self._in_lobby(page):
+                logger.info("Meet lobby reached via Enter fallback")
+                return
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Enter fallback failed: %s", exc)
+
+        await self._screenshot("join_failed")
+        raise RuntimeError("could not find a Join button on the Meet page")
+
+    async def _click_join_button(self, page: Page) -> bool:
+        # Preferred: role-based lookup — matches Meet's aria-label regardless of
+        # DOM layout changes.
+        for name in JOIN_BUTTON_NAMES:
+            try:
+                button = page.get_by_role("button", name=name)
+                await button.first.click(timeout=6000)
+                logger.info("clicked join button by role: %s", name)
+                return True
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("role click '%s' failed: %s", name, exc)
+        # Fallback: legacy text/aria selectors.
+        if await self._click_first(page, JOIN_SELECTORS, timeout=6000):
+            return True
+        # Lobby check — some Meet flows auto-progress without a discrete click.
+        if await self._in_lobby(page):
+            logger.info("in lobby without an explicit Join click")
+            return True
+        return False
+
+    async def _in_lobby(self, page: Page) -> bool:
+        for selector in LOBBY_SELECTORS:
+            try:
+                if await page.locator(selector).first.is_visible(timeout=1500):
+                    return True
+            except Exception:  # noqa: BLE001
+                continue
+        return False
+
+    async def wait_until_in_meeting(self, timeout_ms: int = 180000) -> bool:
         if self._page is None:
             return False
         for selector in IN_MEETING_SELECTORS:
