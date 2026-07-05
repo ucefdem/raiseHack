@@ -8,6 +8,7 @@ import os
 import time
 
 from speech.agent_context import AgentRequest, AgentResponse
+from speech.nikki_client import NikkiClient
 from speech.router_heuristic import STUB_REPLIES, is_direct_agent_call
 from speech.speech_editor import SpeechEditorClient
 
@@ -132,6 +133,7 @@ class OrchestratorClient:
 
     def __init__(self) -> None:
         self._speech_editor = SpeechEditorClient()
+        self._nikki = NikkiClient()
 
     async def invoke(self, request: AgentRequest) -> AgentResponse:
         logger.info("[%s] agent.request %s", _ts(), request.summary_for_log())
@@ -152,6 +154,9 @@ class OrchestratorClient:
             )
         else:
             response = _stub_response(request)
+
+        if response.should_respond and response.routed_to == "nikki":
+            response = await self._nikki.invoke(request)
 
         if response.should_respond and response.text:
             response = await self._speech_editor.prepare(response, request)

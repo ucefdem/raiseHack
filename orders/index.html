@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order Saver</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0%, var(--bg) 55%);
+      color: var(--text);
+      padding: 2rem 1rem;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .card h2 {
+      margin: 0 0 1rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .grid .full { grid-column: 1 / -1; }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+      font-size: 1rem;
+    }
+
+    input:focus {
+      outline: 2px solid var(--accent);
+      border-color: transparent;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.1rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      color: var(--text);
+      border-color: var(--muted);
+    }
+
+    .status {
+      min-height: 1.25rem;
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+    }
+
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--danger); }
+
+    .empty {
+      color: var(--muted);
+      font-size: 0.95rem;
+      padding: 0.5rem 0;
+    }
+
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    li:last-child { border-bottom: none; }
+
+    .order-meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.15rem;
+    }
+
+    .order-total {
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 560px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Order Saver</h1>
+    <p class="subtitle">Add orders and keep them in your browser.</p>
+
+    <div class="card">
+      <h2>New order</h2>
+      <form id="order-form">
+        <div class="grid">
+          <div class="full">
+            <label for="customer">Customer</label>
+            <input id="customer" name="customer" type="text" placeholder="Acme Corp" required />
+          </div>
+          <div>
+            <label for="item">Item</label>
+            <input id="item" name="item" type="text" placeholder="Widget" required />
+          </div>
+          <div>
+            <label for="quantity">Quantity</label>
+            <input id="quantity" name="quantity" type="number" min="1" value="1" required />
+          </div>
+          <div>
+            <label for="price">Unit price ($)</label>
+            <input id="price" name="price" type="number" min="0" step="0.01" placeholder="9.99" required />
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn-primary" id="save-btn">Save order</button>
+          <button type="reset" class="btn-secondary">Clear form</button>
+        </div>
+        <p class="status" id="status" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Saved orders</h2>
+      <ul id="order-list"></ul>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "order-saver-orders";
+
+    const form = document.getElementById("order-form");
+    const statusEl = document.getElementById("status");
+    const listEl = document.getElementById("order-list");
+
+    function loadOrders() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      } catch {
+        return [];
+      }
+    }
+
+    function saveOrders(orders) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    }
+
+    function formatMoney(amount) {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(amount);
+    }
+
+    function setStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = "status" + (type ? " " + type : "");
+    }
+
+    function renderOrders() {
+      const orders = loadOrders();
+      listEl.innerHTML = "";
+
+      if (orders.length === 0) {
+        listEl.innerHTML = '<li class="empty">No orders saved yet.</li>';
+        return;
+      }
+
+      for (const order of orders) {
+        const li = document.createElement("li");
+        li.innerHTML =
+          '<div>' +
+            '<div><strong>' + escapeHtml(order.customer) + '</strong> — ' + escapeHtml(order.item) + '</div>' +
+            '<div class="order-meta">Qty ' + order.quantity + ' @ ' + formatMoney(order.unitPrice) + '</div>' +
+          '</div>' +
+          '<div class="order-total">' + formatMoney(order.total) + '</div>';
+        listEl.appendChild(li);
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function saveOrder() {
+      const customer = document.getElementById("customer").value.trim();
+      const item = document.getElementById("item").value.trim();
+      const quantity = Number(document.getElementById("quantity").value);
+      const unitPrice = Number(document.getElementById("price").value);
+
+      if (!customer || !item || !Number.isFinite(quantity) || quantity < 1 || !Number.isFinite(unitPrice) || unitPrice < 0) {
+        setStatus("Please fill in all fields with valid values.", "err");
+        return;
+      }
+
+      const order = {
+        id: crypto.randomUUID(),
+        customer,
+        item,
+        quantity,
+        unitPrice,
+        total: quantity * unitPrice,
+        savedAt: new Date().toISOString(),
+      };
+
+      const orders = loadOrders();
+      orders.unshift(order);
+      saveOrders(orders);
+
+      form.reset();
+      document.getElementById("quantity").value = "1";
+      renderOrders();
+      setStatus("Order saved.", "ok");
+    }
+
+    document.getElementById("save-order").addEventListener("click", saveOrder);
+
+    renderOrders();
+  </script>
+</body>
+</html>

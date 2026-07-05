@@ -1,0 +1,59 @@
+{
+  "project": "RAISE",
+  "issueType": "Bug",
+  "ticket": {
+    "key": "RAISE-47",
+    "summary": "Order Saver — Save order button does nothing",
+    "status": "Done",
+    "priority": "High",
+    "reporter": "Alex Morgan (Sales)",
+    "assignee": "Engineering",
+    "created": "2026-07-04T15:30:00+02:00",
+    "resolved": "2026-07-04T16:05:00+02:00",
+    "labels": ["order-saver", "demo", "customer-reported"],
+    "description": "Customer demo blocker: the Order Saver app at orders/index.html does not save orders when clicking \"Save order\".\n\nSteps to reproduce:\n1. Open orders/index.html\n2. Fill in Customer, Item, Quantity, Unit price\n3. Click \"Save order\"\n\nExpected: order appears in Saved orders list\nActual: nothing happens — no error, no save\n\nReported by sales during live customer walkthrough.",
+    "resolution": {
+      "type": "Fixed",
+      "summary": "Click handler was bound to wrong element id",
+      "details": "Button id is save-btn but listener targeted save-order. Fix: document.getElementById(\"save-btn\").addEventListener(\"click\", saveOrder) or use form submit handler.",
+      "fixLocation": "orders/index.html line 304"
+    }
+  },
+  "timeline": [
+    {
+      "at": "2026-07-04T15:30:00+02:00",
+      "actor": "Alex Morgan (Sales)",
+      "action": "Created",
+      "comment": "Raised during customer demo — save button completely unresponsive."
+    },
+    {
+      "at": "2026-07-04T15:45:00+02:00",
+      "actor": "Nikki (Sales Agent)",
+      "action": "Commented",
+      "comment": "Logged as RAISE-47, priority High. Customer waiting on fix before renewal call."
+    },
+    {
+      "at": "2026-07-04T15:52:00+02:00",
+      "actor": "Engineering",
+      "action": "In Progress",
+      "comment": "Root cause: JS listener on #save-order, button is #save-btn."
+    },
+    {
+      "at": "2026-07-04T16:05:00+02:00",
+      "actor": "Engineering",
+      "action": "Resolved",
+      "comment": "Fixed id mismatch. Verified save + localStorage persistence."
+    },
+    {
+      "at": "2026-07-04T16:08:00+02:00",
+      "actor": "Nikki (Sales Agent)",
+      "action": "Closed",
+      "comment": "Confirmed with sales — demo unblocked for customer call."
+    }
+  ],
+  "meetingDemoLines": {
+    "reportBug": "Nikki, the save button on Order Saver isn't working — can you log that in Jira?",
+    "checkStatus": "Nikki, what's the status on the Order Saver save button ticket?",
+    "resolvedReply": "RAISE-47 is done — engineering fixed a wrong button id. Save order works now. Want me to reopen the demo?"
+  }
+}
