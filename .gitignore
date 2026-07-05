@@ -36,6 +36,7 @@ env/
 # Logs & temp
 *.log
 .tmp/
+.logs/
 coverage/
 
 # Node / Next / Turborepo
