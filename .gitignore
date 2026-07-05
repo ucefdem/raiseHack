@@ -20,6 +20,7 @@ env/
 .env.*
 !.env.example
 .env.local
+.env.*.local
 
 # macOS
 .DS_Store
@@ -35,11 +36,14 @@ env/
 # Logs & temp
 *.log
 .tmp/
+coverage/
 
-# Node / Next
+# Node / Next / Turborepo
 node_modules/
 .next/
 out/
+.turbo/
+*.tsbuildinfo
 
 # Worker runtime artifacts
 *.png
