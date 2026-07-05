@@ -5,18 +5,17 @@
 ## Architecture
 
 ```
-apps/web  (Next.js + R3F 3D UI)   ─┐
-apps/api  (Hono REST stubs)       ─┼─►  backend/ (FastAPI)  ──WS──►  worker/ (Python)
-web/      (Meet control panel)    ─┘                                    │
+apps/web  (Next.js UI: / + /meet)  ─┐
+apps/api  (Hono REST stubs)        ─┼─►  backend/ (FastAPI)  ──WS──►  worker/ (Python)
+                                    ─┘                                    │
                                                        Playwright/Chrome + Google Meet
                                                                         │
                                                         Virtual audio ⇄ Gradium STT/TTS / agents
 ```
 
-- `apps/web` — 3D building UI (React Three Fiber)
+- `apps/web` — 3D headquarters (`/`) + Meet deploy screen (`/meet`)
 - `apps/api` — Hono REST stubs (chat, presence, meet)
 - `packages/shared` — Shared TypeScript contracts
-- `web/` — Meet control panel (Next.js)
 - `backend/` — FastAPI: session REST + `/worker` WebSocket
 - `worker/` — Meet control, audio routing, speech pipeline
 - `speech/` — Gradium STT/TTS, wake-word routing, orchestrator
@@ -34,21 +33,18 @@ web/      (Meet control panel)    ─┘                                    │
 ## Run
 
 ```bash
-# 1. Backend
+# UI (headquarters + /meet deploy screen)
+npm install && npm run dev          # http://localhost:3000
+
+# Backend
 cd backend && uv sync && uv run uvicorn main:app --host 0.0.0.0 --port 8000
 
-# 2. Worker (separate terminal)
+# Worker
 cd worker && uv sync && uv run playwright install chromium
-cp .env.example .env
-set -a && source .env && set +a
-uv run python main.py
-
-# 3. Meet control panel
-cd web && npm install && cp .env.local.example .env.local && npm run dev
-
-# 4. 3D UI
-cd apps/web && npm install && npm run dev
+cp .env.example .env && uv run python main.py
 ```
+
+**Flow:** `/` → click agent → info popup → **Meet** → `/meet` → share link + Start Agent
 
 ## Shared Meet link
 

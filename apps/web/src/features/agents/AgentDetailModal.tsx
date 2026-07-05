@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Share2, User, Video, X } from "lucide-react";
 import type { Agent } from "@raisehack/shared";
@@ -8,6 +9,7 @@ import { getActivityByAgentId } from "@/data/agentActivities";
 import { useAgentTracking } from "@/features/scene/AgentTrackingProvider";
 import { useSelection } from "@/features/selection/SelectionProvider";
 import { FloorPlanPreview } from "@/features/departments/FloorPlanPreview";
+import { meetAppUrl } from "@/lib/meetAppUrl";
 
 type PanelTab = "overview" | "structure" | "activity";
 
@@ -300,16 +302,17 @@ export function AgentDetailModal() {
         </div>
         <div className="flex items-center gap-2">
           {selectedAgent.meetUrl && (
-            <a
-              href={selectedAgent.meetUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href={meetAppUrl({
+                url: selectedAgent.meetUrl,
+                agent: selectedAgent.name,
+              })}
               className="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium text-slate-900 transition hover:opacity-90"
               style={{ background: accent }}
             >
               <Video className="h-3.5 w-3.5" />
               Meet
-            </a>
+            </Link>
           )}
           <button
             type="button"
