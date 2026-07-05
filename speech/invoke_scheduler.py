@@ -34,6 +34,7 @@ class AgentInvokeScheduler:
     delay_s: float = DEFAULT_DELAY_S
     _generation: int = field(default=0, repr=False)
     _task: asyncio.Task | None = field(default=None, repr=False)
+    _invoke_in_progress: bool = field(default=False, repr=False)
 
     @classmethod
     def from_env(cls) -> AgentInvokeScheduler:
@@ -55,6 +56,8 @@ class AgentInvokeScheduler:
         self.cancel()
 
     def cancel(self) -> None:
+        if self._invoke_in_progress:
+            return
         if self._task and not self._task.done():
             self._task.cancel()
         self._task = None
@@ -64,20 +67,29 @@ class AgentInvokeScheduler:
         mentioned: list[str],
         utterance: str,
         context: TranscriptContext,
-        invoke: Callable[[AgentRequest], Awaitable[AgentResponse]],
+        invoke: Callable[[AgentRequest], Awaitable[None]],
+        *,
+        delay_s: float | None = None,
     ) -> None:
         self.cancel()
         my_gen = self._generation
         primary = mentioned[-1] if mentioned else ""
+        wait_s = self.delay_s if delay_s is None else max(0.0, delay_s)
 
         async def _wait_and_invoke() -> None:
             try:
                 words = ", ".join(mentioned)
-                print(
-                    f"[{_ts()}] Wake word(s) [{words}] in final — "
-                    f"waiting {self.delay_s:.1f}s, then consulting meeting-router..."
-                )
-                await asyncio.sleep(self.delay_s)
+                if wait_s > 0:
+                    print(
+                        f"[{_ts()}] Wake word(s) [{words}] in final — "
+                        f"waiting {wait_s:.1f}s, then consulting meeting-router..."
+                    )
+                    await asyncio.sleep(wait_s)
+                else:
+                    print(
+                        f"[{_ts()}] Wake word(s) [{words}] in final — "
+                        "consulting meeting-router..."
+                    )
                 if my_gen != self._generation:
                     return
                 from speech.agent_context import AgentRequest
@@ -89,7 +101,11 @@ class AgentInvokeScheduler:
                     meeting_transcript=context.as_text(),
                     recent_transcript=context.recent(8),
                 )
-                await invoke(request)
+                self._invoke_in_progress = True
+                try:
+                    await invoke(request)
+                finally:
+                    self._invoke_in_progress = False
             except asyncio.CancelledError:
                 pass
 

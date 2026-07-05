@@ -64,10 +64,11 @@ def _build_payload(
     ref: str | None,
     auto_create_pr: bool,
     mcp_servers: list[dict] | None,
+    model: str | None = None,
 ) -> dict:
     payload: dict = {
         "prompt": {"text": prompt_text},
-        "model": {"id": _cursor_model()},
+        "model": {"id": (model or _cursor_model())},
     }
     if repository:
         payload["repos"] = [{"url": repository, "startingRef": ref or "main"}]
@@ -166,6 +167,7 @@ def invoke_cursor_agent(
     ref: str | None = None,
     auto_create_pr: bool = False,
     mcp_servers: list[dict] | None = None,
+    model: str | None = None,
     timeout_s: float = 30.0,
     wait_for_result: bool = True,
     poll_timeout_s: float | None = None,
@@ -183,12 +185,16 @@ def invoke_cursor_agent(
         return CursorAgentResult(ok=False, error="empty prompt")
 
     url = _cursor_api_url()
+    repo = repository
+    if repo is None:
+        repo = os.getenv("CURSOR_AGENTS_REPOSITORY") or None
     payload = _build_payload(
         prompt_text.strip(),
-        repository=repository or os.getenv("CURSOR_AGENTS_REPOSITORY") or None,
+        repository=repo,
         ref=ref or os.getenv("CURSOR_AGENTS_REF") or None,
         auto_create_pr=auto_create_pr,
         mcp_servers=mcp_servers,
+        model=model,
     )
     body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(

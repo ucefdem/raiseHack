@@ -17,8 +17,8 @@ CHECKOUT_FILE = Path("app") / "checkout.py"
 CHECKOUT_FIXED = Path("app") / "checkout_fixed.py"
 INCIDENT_FILE = Path("INCIDENT.md")
 
-BUGGY_TOTAL_ACCESS = 'cart["total"]'
-FIXED_TOTAL_ACCESS = 'cart.get("total", 0)'
+BUGGY_PATTERNS = ('cart["total"]', "cart['total']")
+FIXED_MARKERS = ('cart.get("total", 0)', "cart.get('total', 0)")
 
 
 def _ts() -> str:
@@ -43,17 +43,25 @@ class NikkiResult:
     file_path: str
 
 
-def _find_bug_line(source: str) -> int | None:
+def _source_has_bug(source: str) -> bool:
+    return any(p in source for p in BUGGY_PATTERNS)
+
+
+def _source_is_fixed(source: str) -> bool:
+    return any(m in source for m in FIXED_MARKERS)
+
+
+def _find_line(source: str, needle: str) -> int | None:
     for idx, line in enumerate(source.splitlines(), start=1):
-        if BUGGY_TOTAL_ACCESS in line or "cart['total']" in line:
-            return idx
-        if FIXED_TOTAL_ACCESS in line or "cart.get('total'" in line:
+        if needle in line:
             return idx
     return None
 
 
-def _checkout_process_checkout(path: Path):
-    spec = importlib.util.spec_from_file_location("mock_checkout", path)
+def _load_process_checkout(path: Path):
+    """Load checkout.py from disk — fresh module name so Python never serves a stale cache."""
+    module_name = f"mock_checkout_{abs(hash(str(path.resolve())))}_{path.stat().st_mtime_ns}"
+    spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
     mod = importlib.util.module_from_spec(spec)
@@ -63,10 +71,11 @@ def _checkout_process_checkout(path: Path):
 
 def _verify_empty_cart(path: Path) -> bool:
     try:
-        fn = _checkout_process_checkout(path)
-        fn({})
-        return True
-    except Exception:
+        fn = _load_process_checkout(path)
+        result = fn({})
+        return isinstance(result, dict) and result.get("amount_due") == 0.0
+    except Exception as exc:
+        logger.warning("empty-cart verify failed for %s: %s", path, exc)
         return False
 
 
@@ -88,9 +97,18 @@ def _build_report(
     )
 
 
+def _patch_source(source: str, fixed_path: Path) -> str:
+    if fixed_path.is_file():
+        return fixed_path.read_text(encoding="utf-8")
+    patched = source
+    for buggy in BUGGY_PATTERNS:
+        patched = patched.replace(buggy, 'cart.get("total", 0)')
+    return patched
+
+
 def investigate_and_fix_local(request: AgentRequest) -> NikkiResult:
     root = mock_incident_root()
-    checkout_path = root / CHECKOUT_FILE
+    checkout_path = (root / CHECKOUT_FILE).resolve()
     fixed_path = root / CHECKOUT_FIXED
 
     if not checkout_path.is_file():
@@ -100,92 +118,89 @@ def investigate_and_fix_local(request: AgentRequest) -> NikkiResult:
             issue_fixed=False,
             root_cause="mock checkout service not found on disk",
             fix_applied="",
-            response_text="NIKKI INCIDENT REPORT\nISSUE_FOUND: no\nISSUE_FIXED: no\nROOT_CAUSE: checkout.py missing",
+            response_text=_build_report(
+                issue_found=False,
+                issue_fixed=False,
+                root_cause="checkout.py missing",
+                fix_applied="none",
+                location=str(checkout_path),
+            ),
             file_path=str(checkout_path),
         )
 
     source = checkout_path.read_text(encoding="utf-8")
-    bug_line = _find_bug_line(source)
-    location = f"{CHECKOUT_FILE.as_posix()}:{bug_line or '?'}"
-
-    already_fixed = FIXED_TOTAL_ACCESS in source or "cart.get('total'" in source
-    has_bug = BUGGY_TOTAL_ACCESS in source or "cart['total']" in source
-
     root_cause = (
         "checkout assumed every cart has a total field — empty carts raised KeyError"
     )
 
-    if already_fixed and not has_bug:
+    if _source_has_bug(source):
+        bug_line = _find_line(source, BUGGY_PATTERNS[0]) or _find_line(source, BUGGY_PATTERNS[1])
+        location = f"{CHECKOUT_FILE.as_posix()}:{bug_line or '?'}"
+
+        patched = _patch_source(source, fixed_path)
+        checkout_path.write_text(patched, encoding="utf-8")
+        print(f"[{_ts()}] nikki: wrote fix → {checkout_path}")
+
+        on_disk = checkout_path.read_text(encoding="utf-8")
+        verified = _verify_empty_cart(checkout_path) and _source_is_fixed(on_disk)
+        if not verified:
+            print(f"[{_ts()}] nikki: WARNING fix verification failed for {checkout_path}")
+
+        fix_applied = (
+            f"updated {checkout_path.name} in place — cart.get('total', 0)"
+            if verified
+            else f"wrote {checkout_path.name} but verification failed"
+        )
+        return NikkiResult(
+            status="completed" if verified else "failed",
+            issue_found=True,
+            issue_fixed=verified,
+            root_cause=root_cause,
+            fix_applied=fix_applied,
+            response_text=_build_report(
+                issue_found=True,
+                issue_fixed=verified,
+                root_cause=root_cause,
+                fix_applied=fix_applied,
+                location=location,
+            ),
+            file_path=str(checkout_path),
+        )
+
+    if _source_is_fixed(source):
+        bug_line = _find_line(source, FIXED_MARKERS[0]) or _find_line(source, FIXED_MARKERS[1])
+        location = f"{CHECKOUT_FILE.as_posix()}:{bug_line or '?'}"
         verified = _verify_empty_cart(checkout_path)
         return NikkiResult(
             status="completed",
             issue_found=True,
             issue_fixed=False,
             root_cause=root_cause,
-            fix_applied="guard already present — cart.get('total', 0)",
+            fix_applied="no change needed — fix already present on disk",
             response_text=_build_report(
                 issue_found=True,
                 issue_fixed=False,
                 root_cause=root_cause,
-                fix_applied=f"already patched in place; empty cart check={'pass' if verified else 'fail'}",
+                fix_applied=f"already fixed in {checkout_path.name}; empty cart check={'pass' if verified else 'fail'}",
                 location=location,
             ),
-            file_path=str(checkout_path.relative_to(root)),
+            file_path=str(checkout_path),
         )
-
-    if not has_bug:
-        return NikkiResult(
-            status="completed",
-            issue_found=False,
-            issue_fixed=False,
-            root_cause="could not locate the empty-cart KeyError pattern in checkout.py",
-            fix_applied="",
-            response_text=_build_report(
-                issue_found=False,
-                issue_fixed=False,
-                root_cause="no matching bug pattern in checkout.py",
-                fix_applied="none",
-                location=location,
-            ),
-            file_path=str(checkout_path.relative_to(root)),
-        )
-
-    # Apply fix in place
-    if fixed_path.is_file():
-        patched = fixed_path.read_text(encoding="utf-8")
-    else:
-        patched = source.replace(BUGGY_TOTAL_ACCESS, FIXED_TOTAL_ACCESS)
-        patched = patched.replace("cart['total']", "cart.get('total', 0)")
-
-    checkout_path.write_text(patched, encoding="utf-8")
-    verified = _verify_empty_cart(checkout_path)
-    fix_applied = (
-        "replaced cart['total'] with cart.get('total', 0) in checkout.py"
-        if verified
-        else "wrote fix but empty-cart verification failed"
-    )
-
-    logger.info(
-        "nikki fix applied path=%s line=%s verified=%s",
-        checkout_path,
-        bug_line,
-        verified,
-    )
 
     return NikkiResult(
-        status="completed" if verified else "failed",
-        issue_found=True,
-        issue_fixed=verified,
-        root_cause=root_cause,
-        fix_applied=fix_applied,
+        status="completed",
+        issue_found=False,
+        issue_fixed=False,
+        root_cause="could not locate the empty-cart bug pattern in checkout.py",
+        fix_applied="none",
         response_text=_build_report(
-            issue_found=True,
-            issue_fixed=verified,
-            root_cause=root_cause,
-            fix_applied=fix_applied,
-            location=location,
+            issue_found=False,
+            issue_fixed=False,
+            root_cause="no matching bug pattern in checkout.py",
+            fix_applied="none",
+            location=str(checkout_path),
         ),
-        file_path=str(checkout_path.relative_to(root)),
+        file_path=str(checkout_path),
     )
 
 
@@ -193,7 +208,8 @@ class NikkiClient:
     """Find and fix bugs under mock-incident/ — local files only."""
 
     async def execute(self, request: AgentRequest) -> AgentResponse:
-        print(f"[{_ts()}] nikki: investigating + fixing at {mock_incident_root()}")
+        root = mock_incident_root()
+        print(f"[{_ts()}] nikki: investigating + fixing at {root}")
         result = investigate_and_fix_local(request)
         should_respond = bool(result.response_text.strip())
         return AgentResponse(
@@ -204,6 +220,6 @@ class NikkiClient:
             should_respond=should_respond,
             reason=(
                 f"nikki: found={result.issue_found} fixed={result.issue_fixed} "
-                f"({result.file_path})"
+                f"path={result.file_path}"
             ),
         )

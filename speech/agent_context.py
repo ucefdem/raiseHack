@@ -62,6 +62,9 @@ class AgentResponse:
     reason: str | None = None
     """Optional orchestrator rationale (logs only, not spoken)."""
 
+    pending_specialist: str | None = None
+    """When set, meeting_session speaks this response first, then runs the specialist."""
+
     def summary_for_log(self) -> str:
         preview = self.text if len(self.text) <= 120 else self.text[:117] + "..."
         return f"{self.agent_name}: {preview}"

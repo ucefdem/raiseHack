@@ -132,6 +132,8 @@ def _incident_to_speech(
 
     cause = _shorten_cause(fields.get("root_cause", ""))
     fix = _shorten_fix_applied(fields.get("fix_applied", fields.get("recommended_fix", "")))
+    if fix.startswith("updated "):
+        fix = fix.replace("updated checkout.py in place — ", "she changed checkout.py — ")
     found = _yes(fields.get("issue_found"))
     fixed = _yes(fields.get("issue_fixed"))
     angie_speaks = "angie" in agent_name.lower() or routed_to == "nikki"
@@ -147,11 +149,16 @@ def _incident_to_speech(
             f"She's fixed it in place — {fix}."
         )
 
-    # Found but not fixed (e.g. already patched)
+    if "already fixed" in fix.lower() or "no change needed" in fix.lower():
+        prefix = "I had Nikki check the code — " if angie_speaks else ""
+        return (
+            f"{prefix}the fix is already in {fields.get('location', 'checkout.py')}. "
+            f"The original issue was {cause}."
+        )
+
     prefix = "Nikki checked the code — " if angie_speaks else ""
     return (
-        f"{prefix}the root cause was {cause}. "
-        f"{fix.capitalize() if fix else 'No new change was needed'}."
+        f"{prefix}she found the issue ({cause}) but couldn't apply the patch. {fix}."
     )
 
 
@@ -248,4 +255,5 @@ class SpeechEditorClient:
             routed_to=response.routed_to,
             should_respond=response.should_respond,
             reason=response.reason,
+            pending_specialist=response.pending_specialist,
         )

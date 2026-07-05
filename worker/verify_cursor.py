@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from speech.agent_context import AgentRequest
+from speech.angie_instant_client import AngieInstantClient, instant_mode
 from speech.cursor_cloud_client import invoke_cursor_agent
 from speech.orchestrator import OrchestratorClient
 
@@ -70,6 +71,25 @@ def check_agent_ping() -> bool:
     return bool(result.text.strip())
 
 
+async def check_angie_instant() -> bool:
+    req = AgentRequest(
+        wake_word="angie",
+        mentioned_wake_words=["angie"],
+        utterance=(
+            "Angie, a customer says checkout crashes when the cart is empty. "
+            "Can you take a look?"
+        ),
+        meeting_transcript="",
+        recent_transcript="",
+    )
+    out = await AngieInstantClient().generate(req)
+    if not out.ok or not out.text.strip():
+        print(f"FAIL: angie-instant — {out.error}")
+        return False
+    print(f"OK: angie-instant — delegate={out.delegate_to} text={out.text!r}")
+    return True
+
+
 async def check_cloud_router() -> bool:
     os.environ["ROUTER_MODE"] = "cloud"
     req = AgentRequest(
@@ -96,6 +116,10 @@ def main() -> None:
         ("Agent ping (poll)", check_agent_ping),
     ]
     ok = all(fn() for _, fn in steps)
+    print()
+    if ok:
+        print("Running angie-instant test (parallel path, may take ~10–35s)...")
+        ok = asyncio.run(check_angie_instant())
     print()
     if ok:
         print("Running cloud meeting-router test (may take ~15–60s)...")

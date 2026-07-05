@@ -52,14 +52,29 @@ When in doubt, choose **listen**. Do not interrupt the meeting for casual mentio
 }
 ```
 
-### Respond — spawn specialist + speak
+### Respond — Angie ack first, then delegate to Nikki
+
+When the meeting asks Angie to fix a code/production issue, set `routed_to: nikki` and put **Angie's immediate spoken ack** in `response_text` (not Nikki's findings — those come after):
 
 ```json
 {
   "action": "respond",
   "routed_to": "nikki",
-  "response_text": "I'll check the pipeline status for you.",
-  "reason": "Speaker directly asked Nikki for pipeline status"
+  "response_text": "Hey — got it. I'll start on this now and have Nikki check our codebase.",
+  "reason": "Angie acknowledges; Nikki will investigate next"
+}
+```
+
+The speech layer speaks `response_text` first, then runs Nikki, then speaks her report.
+
+### Respond — Angie only (no delegation yet)
+
+```json
+{
+  "action": "respond",
+  "routed_to": "angie",
+  "response_text": "I'm here — what did the customer report?",
+  "reason": "Direct call to Angie but no clear incident to delegate yet"
 }
 ```
 
