@@ -28,17 +28,17 @@ export const departments: Department[] = [
   {
     id: "dept-ai-command",
     name: "AI Command",
-    description: "Angie manages live meeting agents and delegates to Nikki and Olaf.",
+    description: "Angie resolves production incidents in Meet — Nikki investigates the local mock codebase.",
     floor: 1,
     zone: makeDepartmentZone(1, "#0ea5e9"),
     meetUrl: SHARED_MEET_URL,
     agentIds: ["agent-angie"],
     missionPlan: {
-      mission: "Deploy Angie as the meeting manager — she routes work to her subagents.",
+      mission: "Resolve customer incidents live in Google Meet with Angie and Nikki.",
       goals: [
-        "Deploy Angie to Google Meet as the single voice interface",
-        "Delegate sales and Jira work to Nikki on demand",
-        "Spin up Olaf for screen-share and computer-use tasks",
+        "Deploy Angie to triage complaints on a Meet call",
+        "Nikki reads mock-incident/ and explains the checkout bug",
+        "Optional: Olaf shows dashboards or URLs during the call",
       ],
       calendar: [
         { id: "ai-1", title: "Voice loop soak test", date: "Daily 09:00", status: "in-progress" },

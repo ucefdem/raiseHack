@@ -144,12 +144,16 @@ class MeetingSpeechSession:
             return
 
         if not self.cfg.speak_response:
+            if response.raw_text and response.raw_text.strip() != response.text.strip():
+                print(f"[{_ts()}] speech-editor raw: {response.raw_text.strip()[:100]}...")
             print(f"[{_ts()}] TTS off — would say: {response.text.strip()}")
             await self._emit_state("listening")
             return
 
         reply = response.text.strip()
         self.guard.arm_for_response(reply)
+        if response.raw_text and response.raw_text.strip() != reply:
+            print(f"[{_ts()}] TTS input (after speech-editor): {reply}")
         print(f"[{_ts()}] speaking → {response.agent_name}: {reply}")
         await self._emit_state("speaking", reply[:80])
         await self.speech_queue.put(reply)

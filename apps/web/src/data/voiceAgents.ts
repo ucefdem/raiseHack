@@ -8,15 +8,15 @@ export const voiceAgents: Record<VoiceAgentId, VoiceAgent> = {
     wakeWord: "Angie",
     title: "Meeting Manager",
     description:
-      "Your single voice interface in Meet. Angie coordinates the call and delegates to Nikki or Olaf when needed.",
+      "Joins Meet to triage incidents and customer complaints. Delegates code fixes to Nikki.",
     skillPath: "agents/angie/SKILL.md",
   },
   nikki: {
     id: "nikki",
     name: "Nikki",
     wakeWord: "Nikki",
-    title: "Sales Subagent",
-    description: "Jira tickets, CRM, pipeline, and deal status — invoked by Angie.",
+    title: "Code Subagent",
+    description: "Reads mock-incident/ locally, finds bugs, and describes fixes — invoked by Angie.",
     skillPath: "agents/nikki/SKILL.md",
     parentId: "angie",
   },

@@ -11,7 +11,7 @@ _GREETING_LEAD = re.compile(
     re.IGNORECASE,
 )
 
-# Future/planning — mention only, not an active call yet
+# Narration / third-person — mention only, not an active call
 _LISTEN_PATTERNS = [
     re.compile(r"\bhand(?:ing)?\s+over\s+to\s+", re.I),
     re.compile(r"\b(?:going|about)\s+to\s+ask\s+", re.I),
@@ -19,7 +19,24 @@ _LISTEN_PATTERNS = [
     re.compile(r"\bsaid\s+", re.I),
     re.compile(r"\bmentioned\s+", re.I),
     re.compile(r"\b(?:asking|ask)\s+\w+\s+to\s+be\s+activated\b", re.I),
+    re.compile(r"\bwe have the case that\b", re.I),
+    re.compile(r"\bthe case (?:is|that)\b", re.I),
+    re.compile(r"\bstart(?:ing)? this meeting\b", re.I),
+    re.compile(r"\bjust testing\b", re.I),
 ]
+
+
+def _greeting_direct_ask(clause: str, word: str) -> bool:
+    """So/hey + agent only counts if the agent name immediately follows the greeting."""
+    lowered = clause.lower().strip().rstrip(".,!?")
+    match = _GREETING_LEAD.match(lowered)
+    if not match:
+        return False
+    after = lowered[match.end() :].lstrip(" ,")
+    return bool(
+        re.match(rf"^{re.escape(word)}\b", after)
+        or re.match(rf"^{re.escape(word)}\s*,", after)
+    )
 
 
 def _clause_direct_ask(clause: str, word: str) -> bool:
@@ -30,7 +47,7 @@ def _clause_direct_ask(clause: str, word: str) -> bool:
     if any(p.search(lowered) for p in _LISTEN_PATTERNS):
         return False
 
-    if _GREETING_LEAD.match(lowered) and re.search(rf"\b{re.escape(word)}\b", lowered):
+    if _greeting_direct_ask(clause, word):
         return True
 
     tokens = re.findall(r"[a-z']+", lowered)
@@ -90,8 +107,24 @@ def is_direct_agent_call(utterance: str, wake_words: list[str]) -> tuple[bool, s
     return best_word is not None, best_word
 
 
+_INCIDENT_HINTS = re.compile(
+    r"\b(bug|incident|outage|error|crash|fix|code|checkout|cart|customer|complaint|broken|working)\b",
+    re.I,
+)
+
+
+def angie_should_delegate_to_nikki(request) -> bool:
+    """Meeting-router: Angie delegates when the meeting describes a code/production issue."""
+    from speech.agent_context import AgentRequest
+
+    if not isinstance(request, AgentRequest):
+        return False
+    text = f"{request.utterance} {request.recent_transcript} {request.meeting_transcript}"
+    return bool(_INCIDENT_HINTS.search(text))
+
+
 STUB_REPLIES = {
-    "angie": "I'm here. I'll coordinate that for you.",
-    "nikki": "I'm here. I'll check on that for you.",
+    "angie": "I'm here — what's the issue?",
+    "nikki": "I'm checking the mock codebase for that issue now.",
     "olaf": "I'm here. Pulling that up now.",
 }

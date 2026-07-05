@@ -2,20 +2,53 @@
 """
 Simulated Google Meet — mic in, speaker out.
 
-Pipeline:
-  mic → real-time STT (constant context) → wake word? → meeting-router → TTS (if respond)
+Same agent pipeline as the worker (meeting-router → Angie → Nikki → speech-editor → TTS),
+without Chrome or Google Meet.
 
-Run:
-  export GRADIUM_API_KEY=...
-  python -m speech.meeting_sim
+Run from worker/ (loads worker/.env automatically):
+
+    cd worker && uv run python run_meeting_sim.py
+
+Or from repo root:
+
+    cd worker && uv run python ../speech/meeting_sim.py
+
+Say clearly: "Angie, a customer says checkout crashes when the cart is empty."
+Wait ~2s silence after you finish speaking so the invoke scheduler fires.
+
+Env (from worker/.env):
+  GRADIUM_API_KEY   — required (STT + TTS)
+  CURSOR_API_KEY    — required if ROUTER_MODE=cloud
+  ROUTER_MODE       — heuristic | cloud | listen
+  SPEAK_RESPONSE=0  — log agent text only, no TTS audio
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import sys
+from pathlib import Path
+
+
+def _load_worker_env() -> None:
+    """Load worker/.env so sim uses the same keys as the Meet worker."""
+    env_path = Path(__file__).resolve().parents[1] / "worker" / ".env"
+    if not env_path.is_file():
+        env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ[key.strip()] = value.strip()
+
+
+_load_worker_env()
 
 from speech.audio_io import AudioPlayer, MicCapture
 from speech.meet_audio import gated_audio_sender

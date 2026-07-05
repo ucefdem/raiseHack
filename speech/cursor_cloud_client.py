@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_API_URL = "https://api.cursor.com/v1/agents"
 DEFAULT_MODEL = "composer-2.5"
+TERMINAL_RUN_STATUSES = frozenset({"FINISHED", "ERROR", "CANCELLED", "EXPIRED"})
+DEFAULT_POLL_TIMEOUT_S = 90.0
+DEFAULT_POLL_INTERVAL_S = 1.0
 
 
 @dataclass
@@ -74,6 +77,73 @@ def _build_payload(
     return payload
 
 
+def _api_request(
+    method: str,
+    url: str,
+    *,
+    api_key: str,
+    body: dict | None = None,
+    timeout_s: float = 30.0,
+) -> tuple[int, dict | str]:
+    headers = {
+        "Accept": "application/json",
+        "Authorization": _basic_auth_header(api_key),
+        "User-Agent": "raisehack-voice-loop/1.0",
+    }
+    data = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(url, data=data, method=method, headers=headers)
+    with urllib.request.urlopen(request, timeout=timeout_s) as resp:
+        raw = resp.read().decode("utf-8", errors="replace")
+    try:
+        return resp.status, json.loads(raw) if raw else {}
+    except json.JSONDecodeError:
+        return resp.status, raw
+
+
+def _poll_run_result(
+    *,
+    api_key: str,
+    agent_id: str,
+    run_id: str,
+    poll_timeout_s: float,
+    poll_interval_s: float,
+) -> tuple[str, str | None]:
+    """Poll GET /v1/agents/{id}/runs/{runId} until terminal or timeout."""
+    base = _cursor_api_url().rstrip("/")
+    url = f"{base}/{agent_id}/runs/{run_id}"
+    deadline = time.monotonic() + poll_timeout_s
+    last_status = "UNKNOWN"
+
+    while time.monotonic() < deadline:
+        try:
+            _, data = _api_request("GET", url, api_key=api_key, timeout_s=30.0)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            return "", f"poll HTTP {exc.code}: {detail[:200]}"
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            return "", f"poll error: {exc}"
+
+        if not isinstance(data, dict):
+            time.sleep(poll_interval_s)
+            continue
+
+        last_status = str(data.get("status", last_status))
+        if last_status in TERMINAL_RUN_STATUSES:
+            result = str(data.get("result", "") or "").strip()
+            if last_status == "FINISHED" and result:
+                return result, None
+            if last_status == "FINISHED":
+                return "", f"run finished with empty result (status={last_status})"
+            return "", f"run ended with status={last_status}"
+
+        time.sleep(poll_interval_s)
+
+    return "", f"poll timeout after {poll_timeout_s:.0f}s (last status={last_status})"
+
+
 def _extract_text(response: dict) -> str:
     """Best-effort extraction of the initial run's text output.
 
@@ -97,6 +167,9 @@ def invoke_cursor_agent(
     auto_create_pr: bool = False,
     mcp_servers: list[dict] | None = None,
     timeout_s: float = 30.0,
+    wait_for_result: bool = True,
+    poll_timeout_s: float | None = None,
+    poll_interval_s: float | None = None,
 ) -> CursorAgentResult:
     """Send a text prompt to the Cursor Cloud Agents API.
 
@@ -158,19 +231,49 @@ def invoke_cursor_agent(
 
     agent = data.get("agent") if isinstance(data.get("agent"), dict) else {}
     run = data.get("run") if isinstance(data.get("run"), dict) else {}
+    agent_id = str(agent.get("id")) if agent.get("id") else None
+    run_id = str(run.get("id")) if run.get("id") else None
     text = _extract_text(data)
+
+    if wait_for_result and agent_id and run_id and not text:
+        poll_timeout = poll_timeout_s
+        if poll_timeout is None:
+            raw_poll = os.getenv("CURSOR_AGENT_POLL_TIMEOUT_S", "").strip()
+            try:
+                poll_timeout = float(raw_poll) if raw_poll else DEFAULT_POLL_TIMEOUT_S
+            except ValueError:
+                poll_timeout = DEFAULT_POLL_TIMEOUT_S
+        poll_every = poll_interval_s or DEFAULT_POLL_INTERVAL_S
+        polled, poll_err = _poll_run_result(
+            api_key=key,
+            agent_id=agent_id,
+            run_id=run_id,
+            poll_timeout_s=poll_timeout,
+            poll_interval_s=poll_every,
+        )
+        if polled:
+            text = polled
+        elif poll_err:
+            logger.warning("cursor agents poll: %s", poll_err)
+            return CursorAgentResult(
+                ok=False,
+                error=poll_err,
+                agent_id=agent_id,
+                run_id=run_id,
+                raw=data,
+            )
 
     logger.info(
         "cursor agents API ok in %.2fs agent=%s run=%s text_chars=%d",
-        elapsed,
-        agent.get("id"),
-        run.get("id"),
+        time.monotonic() - started,
+        agent_id,
+        run_id,
         len(text),
     )
     return CursorAgentResult(
         ok=True,
         text=text,
-        agent_id=str(agent.get("id")) if agent.get("id") else None,
-        run_id=str(run.get("id")) if run.get("id") else None,
+        agent_id=agent_id,
+        run_id=run_id,
         raw=data,
     )

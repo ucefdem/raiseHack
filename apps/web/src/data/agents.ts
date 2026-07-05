@@ -8,7 +8,7 @@ export const agents: Agent[] = [
     role: "orchestrator",
     departmentId: "dept-ai-command",
     personaPrompt:
-      "You are Angie, the meeting manager. You listen, coordinate the call, and delegate to your subagents Nikki (sales) and Olaf (computer-use) when specialist work is needed.",
+      "You are Angie, the incident orchestrator. You join Google Meet calls, triage customer complaints and outages, and delegate code fixes to Nikki in the local mock codebase.",
     status: "online",
     createdBy: { name: "AI Command", role: "Manager", team: "Voice Agents" },
     meetUrl: SHARED_MEET_URL,

@@ -57,7 +57,7 @@ def parse_editor_response(raw: str, fallback: str) -> SpeechScript:
     raw = str(data.get("raw_text", "") or fallback).strip() or fallback
 
     if not spoken:
-        spoken = _local_prepare(raw)
+        spoken = _local_prepare(raw, response=response)
 
     return SpeechScript(raw_text=raw, spoken_text=spoken, notes=notes)
 
@@ -71,15 +71,106 @@ _ROBOTIC_OPENERS = re.compile(
 
 _BULLET = re.compile(r"^\s*[-*•]\s+", re.M)
 _NUMBERED = re.compile(r"^\s*\d+\.\s+", re.M)
+_FIELD = re.compile(
+    r"^(ROOT_CAUSE|FIX_APPLIED|ISSUE_FOUND|ISSUE_FIXED|LOCATION|RECOMMENDED_FIX):\s*(.+)$",
+    re.M | re.I,
+)
 
 
-def _local_prepare(text: str) -> str:
+def _yes(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"yes", "true", "1"}
+
+
+def _parse_incident_fields(text: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for match in _FIELD.finditer(text):
+        fields[match.group(1).lower()] = match.group(2).strip()
+    return fields
+
+
+def _shorten_cause(cause: str) -> str:
+    cause = re.sub(r"\s*—\s*", " — ", cause)
+    cause = cause.replace(
+        "checkout assumed every cart has a total field",
+        "checkout crashed on empty carts",
+    )
+    cause = cause.replace(
+        "checkout.py assumes every cart has a total field",
+        "checkout crashed on empty carts",
+    )
+    cause = cause.replace("empty carts raised KeyError", "when the cart had no total")
+    cause = cause.replace("empty carts raise KeyError", "when the cart has no total")
+    return cause.rstrip(".")
+
+
+def _shorten_fix_applied(fix: str) -> str:
+    fix = fix.replace(
+        "replaced cart['total'] with cart.get('total', 0) in checkout.py",
+        "defaulting missing cart totals to zero in checkout.py",
+    )
+    fix = fix.replace(
+        "guard already present — cart.get('total', 0)",
+        "the guard was already in place",
+    )
+    fix = re.sub(r"\s*—\s*see checkout_fixed\.py", "", fix, flags=re.I)
+    return fix.rstrip(".")
+
+
+def _incident_to_speech(
+    raw: str,
+    *,
+    agent_name: str,
+    routed_to: str | None,
+) -> str | None:
+    """Turn Nikki's raw incident report into meeting-friendly speech."""
+    if "NIKKI INCIDENT REPORT" not in raw and "ROOT_CAUSE:" not in raw:
+        return None
+
+    fields = _parse_incident_fields(raw)
+    if not fields:
+        return None
+
+    cause = _shorten_cause(fields.get("root_cause", ""))
+    fix = _shorten_fix_applied(fields.get("fix_applied", fields.get("recommended_fix", "")))
+    found = _yes(fields.get("issue_found"))
+    fixed = _yes(fields.get("issue_fixed"))
+    angie_speaks = "angie" in agent_name.lower() or routed_to == "nikki"
+
+    if not found:
+        prefix = "I had Nikki check the code — " if angie_speaks else ""
+        return f"{prefix}she couldn't find a matching bug in checkout.py."
+
+    if fixed:
+        prefix = "I had Nikki check the code — " if angie_speaks else ""
+        return (
+            f"{prefix}she found the issue: {cause}. "
+            f"She's fixed it in place — {fix}."
+        )
+
+    # Found but not fixed (e.g. already patched)
+    prefix = "Nikki checked the code — " if angie_speaks else ""
+    return (
+        f"{prefix}the root cause was {cause}. "
+        f"{fix.capitalize() if fix else 'No new change was needed'}."
+    )
+
+
+def _local_prepare(text: str, *, response: AgentResponse | None = None) -> str:
     """
     Lightweight local rewrite — no LLM.
 
     Strips markdown, tightens phrasing, keeps it short and speakable.
     Cloud agent (SPEECH_EDITOR_MODE=cloud) replaces this in production.
     """
+    if response is not None:
+        incident_speech = _incident_to_speech(
+            text,
+            agent_name=response.agent_name,
+            routed_to=response.routed_to,
+        )
+        if incident_speech:
+            return incident_speech
+
     t = text.strip()
     if not t:
         return t
@@ -127,7 +218,7 @@ class SpeechEditorClient:
         if not response.should_respond or not response.text.strip():
             return response
 
-        raw = response.text.strip()
+        raw = (response.raw_text or response.text).strip()
         mode = editor_mode()
 
         if mode == "cloud":
@@ -135,16 +226,18 @@ class SpeechEditorClient:
             # script = parse_editor_response(cloud_output, raw)
             script = SpeechScript(
                 raw_text=raw,
-                spoken_text=_local_prepare(raw),
+                spoken_text=_local_prepare(raw, response=response),
                 notes="SPEECH_EDITOR_MODE=cloud but agent not wired — used local fallback",
             )
         elif mode == "off":
             script = SpeechScript(raw_text=raw, spoken_text=raw)
         else:
-            script = SpeechScript(raw_text=raw, spoken_text=_local_prepare(raw))
+            script = SpeechScript(raw_text=raw, spoken_text=_local_prepare(raw, response=response))
 
         if script.spoken_text != raw:
-            print(f"[{_ts()}] speech-editor: {raw[:60]!r} → {script.spoken_text!r}")
+            print(f"[{_ts()}] speech-editor: raw → spoken")
+            print(f"[{_ts()}]   raw:    {raw[:120]}{'...' if len(raw) > 120 else ''}")
+            print(f"[{_ts()}]   spoken: {script.spoken_text!r}")
         if script.notes:
             logger.debug("speech-editor notes: %s", script.notes)
 

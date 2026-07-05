@@ -64,18 +64,33 @@ with retry + try/except. Failures never crash the meeting loop.
 | Agent | Folder | Wake word |
 |-------|--------|-----------|
 | Meeting router | `agents/meeting-router/SKILL.md` | — |
-| Angie (Orchestrator) | `agents/angie/SKILL.md` | `Angie` |
-| Nikki (Sales) | `agents/nikki/SKILL.md` | `Nikki` |
+| Angie (Incident orchestrator) | `agents/angie/SKILL.md` | `Angie` |
+| Nikki (Code — local mock) | `agents/nikki/SKILL.md` | `Nikki` |
 | Olaf (Computer-Use) | `agents/olaf/SKILL.md` | `Olaf` |
 | Speech editor | `agents/speech-editor/SKILL.md` | — |
 
 ## Speech pipeline
 
 ```
-Meet participants → virtual capture (16 kHz)
-  → resample → Gradium STT → wake word → meeting-router
-  → Cursor Cloud Agent (tool call with try/except)
-  → TTS → resample → virtual mic (24 kHz) → Meet
+Meet audio → Gradium STT → wake word → meeting-router
+  → Angie delegates → Nikki (raw incident analysis)
+  → speech-editor (conversational script)
+  → Gradium TTS → Meet audio
 ```
 
 Core loop: `speech/meeting_session.py` · Meet audio bridge: `worker/speech_bridge.py`
+
+## Mock incident codebase
+
+Demo customer complaints map to a **local** bug — no Git repo access required.
+
+```
+mock-incident/
+  INCIDENT.md           # customer write-up
+  app/checkout.py       # planted bug (empty cart → KeyError)
+  app/checkout_fixed.py # reference fix
+```
+
+Nikki reads these files via `speech/nikki_client.py`. Override path with `MOCK_INCIDENT_ROOT` in `worker/.env`.
+
+**Try in local sim:** `ROUTER_MODE=heuristic` then say *"Angie, a customer says checkout crashes on an empty cart."*

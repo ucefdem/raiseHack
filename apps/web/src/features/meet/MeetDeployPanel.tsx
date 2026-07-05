@@ -125,7 +125,7 @@ export function MeetDeployPanel() {
           </h1>
           <p className="mt-3 text-slate-400">
             {voiceAgent?.id === "angie"
-              ? "Angie joins as your meeting manager. She delegates to Nikki (sales) and Olaf (computer-use) when you need specialist work."
+              ? "Angie joins to triage incidents. She sends Nikki into the local mock codebase when you report a bug or customer complaint."
               : agentName
                 ? `Send ${agentName} into the meeting to listen and respond.`
                 : "Paste a Google Meet link and the agent will join, listen, and speak."}

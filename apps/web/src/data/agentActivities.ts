@@ -3,7 +3,7 @@ import type { AgentActivity } from "@raisehack/shared";
 export const agentActivities: AgentActivity[] = [
   {
     agentId: "agent-angie",
-    task: "Managing live meeting — Nikki on Jira updates, Olaf prepping a dashboard demo",
+    task: "Triaging Acme checkout incident — Nikki reviewing mock-incident/app/checkout.py",
     location: "Command desk · Floor 1",
     mood: "Coordinating",
     progress: 80,

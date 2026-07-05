@@ -6,19 +6,21 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 
 from speech.agent_context import AgentRequest, AgentResponse
 from speech.cursor_cloud_client import invoke_cursor_agent
 from speech.meet_link import shared_meet_url
+from speech.nikki_client import NikkiClient
 from speech.olaf_client import OlafClient
-from speech.router_heuristic import STUB_REPLIES, is_direct_agent_call
+from speech.router_heuristic import STUB_REPLIES, angie_should_delegate_to_nikki, is_direct_agent_call
 from speech.speech_editor import SpeechEditorClient
 
 logger = logging.getLogger(__name__)
 
 AGENT_MAP = {
     "angie": "Orchestrator (Angie)",
-    "nikki": "Sales Agent (Nikki)",
+    "nikki": "Code Agent (Nikki)",
     "olaf": "Computer-Use Agent (Olaf)",
     "meeting-router": "Meeting Router",
 }
@@ -102,6 +104,16 @@ def _heuristic_stub_response(
             reason="heuristic stub: mention only, keep listening",
         )
 
+    # Angie decides to delegate — router sets routed_to nikki, not the orchestrator.
+    if routed_to == "angie" and angie_should_delegate_to_nikki(request):
+        return AgentResponse(
+            text="I'll have Nikki check the code on that.",
+            agent_name=AGENT_MAP["angie"],
+            routed_to="nikki",
+            should_respond=True,
+            reason="heuristic stub: Angie delegates to Nikki",
+        )
+
     return AgentResponse(
         text=STUB_REPLIES.get(routed_to, "I'm here. Working on that now."),
         agent_name=AGENT_MAP.get(routed_to, f"Agent ({routed_to.title()})"),
@@ -129,6 +141,15 @@ def _stub_response(request: AgentRequest, active_voice_agent: str | None = None)
     return _heuristic_stub_response(request, active_voice_agent)
 
 
+def _load_skill(rel_path: str) -> str:
+    """Load a local SKILL.md so cloud agents work without a GitHub repo attached."""
+    root = Path(__file__).resolve().parents[1]
+    path = root / rel_path
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    return f"(skill file not found: {rel_path})"
+
+
 class OrchestratorClient:
     """
     Invoke the meeting-router agent with full meeting context.
@@ -142,6 +163,7 @@ class OrchestratorClient:
     def __init__(self, active_voice_agent: str | None = None) -> None:
         self._active_voice_agent = (active_voice_agent or "").strip().lower() or None
         self._speech_editor = SpeechEditorClient()
+        self._nikki = NikkiClient()
         self._olaf = OlafClient()
 
     async def _invoke_cloud_router(self, request: AgentRequest) -> AgentResponse:
@@ -152,8 +174,10 @@ class OrchestratorClient:
         the Cursor Cloud Agents API" the voice loop uses for every wake word.
         """
         meet_url = shared_meet_url()
+        skill = _load_skill("agents/meeting-router/SKILL.md")
         prompt = (
-            "Read and follow agents/meeting-router/SKILL.md.\n\n"
+            "You are the meeting-router cloud agent. Follow the skill below.\n\n"
+            f"--- SKILL ---\n{skill}\n--- END SKILL ---\n\n"
             f"AgentRequest:\n{request.to_json()}\n\n"
             f"Shared Meet URL for every agent: {meet_url or '(not configured)'}\n\n"
             "Return the router JSON (action, routed_to, response_text, reason) only."
@@ -196,8 +220,24 @@ class OrchestratorClient:
     async def _dispatch_specialist(
         self, request: AgentRequest, response: AgentResponse
     ) -> AgentResponse:
-        """Route to specialist agent when meeting-router delegates."""
+        """Spawn specialist only when meeting-router sets routed_to (Angie's decision)."""
         target = response.routed_to or request.wake_word
+
+        if target == "nikki":
+            print(f"[{_ts()}] orchestrator → Nikki (Angie delegated via meeting-router)")
+            nikki = await self._nikki.execute(request)
+            if not nikki.should_respond or not nikki.text:
+                return nikki
+            # Angie speaks; Nikki's raw findings are merged after speech-editor.
+            return AgentResponse(
+                text=nikki.text,
+                raw_text=nikki.raw_text or nikki.text,
+                agent_name="Angie",
+                routed_to="nikki",
+                should_respond=True,
+                reason=f"router → nikki: {nikki.reason}",
+            )
+
         if target == "olaf":
             print(f"[{_ts()}] orchestrator → spawning Olaf (computer-use)")
             return await self._olaf.execute(request)
@@ -216,6 +256,8 @@ class OrchestratorClient:
             response = _stub_response(request, self._active_voice_agent)
 
         if response.should_respond:
+            if response.routed_to:
+                print(f"[{_ts()}] meeting-router → routed_to={response.routed_to}")
             response = await self._dispatch_specialist(request, response)
 
         if response.should_respond and response.text:
