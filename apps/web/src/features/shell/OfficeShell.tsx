@@ -6,7 +6,10 @@ import { AgentDetailModal } from "@/features/agents/AgentDetailModal";
 import { DepartmentMissionModal } from "@/features/departments/DepartmentMissionModal";
 import { MeetingRoomModal } from "@/features/meeting/MeetingRoomModal";
 import { AgentTrackingProvider } from "@/features/scene/AgentTrackingProvider";
-import { SelectionProvider } from "@/features/selection/SelectionProvider";
+import {
+  SelectionProvider,
+  useSelection,
+} from "@/features/selection/SelectionProvider";
 import {
   CompanyOpsBar,
   CompanyOpsPanel,
@@ -28,6 +31,8 @@ const BuildingScene = dynamic(
 
 function OfficeShellContent() {
   const [opsPanel, setOpsPanel] = useState<OpsPanel>(null);
+  const { selectedMeetingRoom } = useSelection();
+  const roomFocusActive = Boolean(selectedMeetingRoom);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
@@ -40,6 +45,12 @@ function OfficeShellContent() {
 
       <main className="absolute inset-0">
         <BuildingScene />
+        <div
+          className={`pointer-events-none absolute inset-0 z-[1] bg-black/35 transition-opacity duration-500 ease-out ${
+            roomFocusActive ? "opacity-100" : "opacity-0"
+          }`}
+          aria-hidden
+        />
       </main>
 
       <header className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex items-start justify-between px-6 py-5">

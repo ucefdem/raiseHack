@@ -54,3 +54,16 @@ export function getMeetingRoomsByFloor(floor: number): MeetingRoom[] {
 export function getMeetingRoomsForDepartment(departmentId: string): MeetingRoom[] {
   return meetingRooms.filter((room) => room.departmentIds.includes(departmentId));
 }
+
+/** Best room for an agent — dedicated dept room first, then floor fallback */
+export function getPrimaryMeetingRoomForDepartment(departmentId: string): MeetingRoom | undefined {
+  const deptRooms = getMeetingRoomsForDepartment(departmentId);
+  if (deptRooms.length > 0) {
+    const dedicated = deptRooms.find((room) => room.departmentIds.length === 1);
+    if (dedicated) return dedicated;
+    return [...deptRooms].sort(
+      (a, b) => a.departmentIds.length - b.departmentIds.length,
+    )[0];
+  }
+  return meetingRooms.find((room) => room.id === "room-cross-functional");
+}

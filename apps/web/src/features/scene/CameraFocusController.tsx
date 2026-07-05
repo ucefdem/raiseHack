@@ -10,13 +10,17 @@ import {
   useAgentTracking,
 } from "./AgentTrackingProvider";
 import { FIXED_CAMERA } from "./buildingConfig";
+import {
+  getMeetingRoomFocusPoint,
+  ROOM_FOCUS_DISTANCE_SCALE,
+} from "./meetingRoomFocus";
 
 const REST_TARGET = new Vector3(...FIXED_CAMERA.target);
 const REST_OFFSET = new Vector3(...FIXED_CAMERA.position).sub(REST_TARGET);
-const FOCUS_DISTANCE_SCALE = 0.36;
+const AGENT_FOCUS_DISTANCE_SCALE = 0.36;
 const SNAP_THRESHOLD = 0.06;
 
-const agentFocusPoint = new Vector3();
+const focusPoint = new Vector3();
 const cameraOffset = new Vector3();
 const desiredOffset = new Vector3();
 const restCamera = new Vector3();
@@ -26,7 +30,7 @@ interface CameraFocusControllerProps {
 }
 
 export function CameraFocusController({ controlsRef }: CameraFocusControllerProps) {
-  const { selectedAgent } = useSelection();
+  const { selectedAgent, selectedMeetingRoom } = useSelection();
   const { getAgentRef } = useAgentTracking();
   const { camera } = useThree();
 
@@ -34,6 +38,7 @@ export function CameraFocusController({ controlsRef }: CameraFocusControllerProp
   const goalOffset = useRef(new Vector3().copy(REST_OFFSET));
   const isAnimating = useRef(false);
   const trackingAgent = useRef(false);
+  const trackingRoom = useRef(false);
   const zoomingIn = useRef(false);
 
   useEffect(() => {
@@ -42,18 +47,40 @@ export function CameraFocusController({ controlsRef }: CameraFocusControllerProp
 
     if (selectedAgent) {
       trackingAgent.current = true;
+      trackingRoom.current = false;
       zoomingIn.current = true;
+      isAnimating.current = false;
       cameraOffset.subVectors(camera.position, controls.target);
-      desiredOffset.copy(REST_OFFSET).multiplyScalar(FOCUS_DISTANCE_SCALE);
+      desiredOffset.copy(REST_OFFSET).multiplyScalar(AGENT_FOCUS_DISTANCE_SCALE);
+      return;
+    }
+
+    if (selectedMeetingRoom) {
+      trackingAgent.current = false;
+      trackingRoom.current = true;
+      zoomingIn.current = true;
+      isAnimating.current = false;
+      cameraOffset.subVectors(camera.position, controls.target);
+      desiredOffset.copy(REST_OFFSET).multiplyScalar(ROOM_FOCUS_DISTANCE_SCALE);
+      focusPoint.set(...getMeetingRoomFocusPoint(selectedMeetingRoom));
+      goalTarget.current.copy(focusPoint);
       return;
     }
 
     trackingAgent.current = false;
+    trackingRoom.current = false;
     zoomingIn.current = false;
     goalTarget.current.copy(REST_TARGET);
     goalOffset.current.copy(REST_OFFSET);
     isAnimating.current = true;
-  }, [selectedAgent?.id, selectedAgent, controlsRef, camera]);
+  }, [
+    selectedAgent?.id,
+    selectedAgent,
+    selectedMeetingRoom?.id,
+    selectedMeetingRoom,
+    controlsRef,
+    camera,
+  ]);
 
   useFrame((_, delta) => {
     const controls = controlsRef.current;
@@ -63,8 +90,8 @@ export function CameraFocusController({ controlsRef }: CameraFocusControllerProp
       const group = getAgentRef(selectedAgent.id)?.current;
       if (!group) return;
 
-      group.getWorldPosition(agentFocusPoint);
-      agentFocusPoint.y += AGENT_FOCUS_HEIGHT;
+      group.getWorldPosition(focusPoint);
+      focusPoint.y += AGENT_FOCUS_HEIGHT;
 
       cameraOffset.subVectors(camera.position, controls.target);
 
@@ -76,7 +103,26 @@ export function CameraFocusController({ controlsRef }: CameraFocusControllerProp
       }
 
       const t = 1 - Math.exp(-delta * 10);
-      controls.target.lerp(agentFocusPoint, t);
+      controls.target.lerp(focusPoint, t);
+      camera.position.copy(controls.target).add(cameraOffset);
+      controls.update();
+      return;
+    }
+
+    if (trackingRoom.current && selectedMeetingRoom) {
+      focusPoint.set(...getMeetingRoomFocusPoint(selectedMeetingRoom));
+
+      cameraOffset.subVectors(camera.position, controls.target);
+
+      if (zoomingIn.current) {
+        cameraOffset.lerp(desiredOffset, 1 - Math.exp(-delta * 4));
+        if (cameraOffset.distanceTo(desiredOffset) < 0.08) {
+          zoomingIn.current = false;
+        }
+      }
+
+      const t = 1 - Math.exp(-delta * 8);
+      controls.target.lerp(focusPoint, t);
       camera.position.copy(controls.target).add(cameraOffset);
       controls.update();
       return;

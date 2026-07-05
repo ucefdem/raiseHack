@@ -9,6 +9,11 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 def _get(name: str, default: str) -> str:
@@ -50,6 +55,12 @@ class Config:
     chrome_channel: str = _get("CHROME_CHANNEL", "chrome")  # use installed Chrome, not bundled Chromium
     headless: bool = _get("HEADLESS", "false").lower() in ("1", "true", "yes")
     agent_display_name: str = _get("AGENT_DISPLAY_NAME", "AI Project Agent")
+    worker_standby: bool = _get("WORKER_STANDBY", "false").lower() in ("1", "true", "yes")
+
+    @property
+    def gradium_configured(self) -> bool:
+        key = self.gradium_api_key.strip()
+        return key not in {"", "gd_your_key_here", "your_key_here"}
 
     @property
     def input_chunk_frames(self) -> int:

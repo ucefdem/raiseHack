@@ -14,9 +14,13 @@ export interface OfficeSelectionContext extends OfficeSelection {
   selectedDepartment: Department | null;
   selectedAgent: Agent | null;
   selectedMeetingRoom: MeetingRoom | null;
+  /** Agent queued for Meet deploy when a meeting room panel is open */
+  meetDeployAgent: Agent | null;
   setSelectedDepartment: (departmentId: string | null) => void;
   setSelectedAgent: (agentId: string | null) => void;
   setSelectedMeetingRoom: (roomId: string | null) => void;
+  /** Open the best meeting room for this agent and pre-fill Meet deploy */
+  openMeetForAgent: (agentId: string) => void;
   clearSelection: () => void;
 }
 

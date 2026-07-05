@@ -1,7 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import { Text } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
 import type { ThreeEvent } from "@react-three/fiber";
+import type { Mesh } from "three";
 import type { MeetingRoom } from "@raisehack/shared";
 import { useSelection } from "@/features/selection/SelectionProvider";
 import { BUILDING, getFloorBaseY } from "./buildingConfig";
@@ -14,7 +17,20 @@ interface MeetingRoomPodProps {
 export function MeetingRoomPod({ room }: MeetingRoomPodProps) {
   const { selectedMeetingRoomId, setSelectedMeetingRoom } = useSelection();
   const isSelected = selectedMeetingRoomId === room.id;
+  const isDimmed = Boolean(selectedMeetingRoomId) && !isSelected;
   const accent = room.accentColor ?? "#4ade80";
+  const screenRef = useRef<Mesh>(null);
+
+  useFrame(({ clock }) => {
+    const screen = screenRef.current;
+    if (!screen?.material || Array.isArray(screen.material)) return;
+    const mat = screen.material;
+    if ("emissiveIntensity" in mat) {
+      const base = isSelected ? 0.55 : 0.15;
+      const pulse = isSelected ? Math.sin(clock.elapsedTime * 3) * 0.12 : 0;
+      mat.emissiveIntensity = base + pulse;
+    }
+  });
 
   const floorY = getFloorBaseY(room.floor);
   const [x, yOff, z] = room.position;
@@ -36,7 +52,7 @@ export function MeetingRoomPod({ room }: MeetingRoomPodProps) {
         <meshStandardMaterial
           color={accent}
           transparent
-          opacity={isSelected ? 0.2 : 0.08}
+          opacity={isSelected ? 0.32 : isDimmed ? 0.04 : 0.08}
           depthWrite={false}
         />
       </mesh>
@@ -44,12 +60,20 @@ export function MeetingRoomPod({ room }: MeetingRoomPodProps) {
       {/* Back + side walls — low, open front */}
       <mesh position={[0, h * 0.45, -d / 2 + 0.015]}>
         <boxGeometry args={[w, h * 0.85, 0.025]} />
-        <meshStandardMaterial color={accent} transparent opacity={0.2} />
+        <meshStandardMaterial
+          color={accent}
+          transparent
+          opacity={isDimmed ? 0.08 : isSelected ? 0.35 : 0.2}
+        />
       </mesh>
       {([-1, 1] as const).map((side) => (
         <mesh key={side} position={[side * (w / 2 - 0.012), h * 0.4, -d * 0.15]}>
           <boxGeometry args={[0.025, h * 0.75, d * 0.65]} />
-          <meshStandardMaterial color={accent} transparent opacity={0.15} />
+          <meshStandardMaterial
+            color={accent}
+            transparent
+            opacity={isDimmed ? 0.06 : isSelected ? 0.28 : 0.15}
+          />
         </mesh>
       ))}
 
@@ -60,14 +84,24 @@ export function MeetingRoomPod({ room }: MeetingRoomPodProps) {
       </mesh>
 
       {/* Screen */}
-      <mesh position={[0, h * 0.55, -d / 2 + 0.03]}>
+      <mesh ref={screenRef} position={[0, h * 0.55, -d / 2 + 0.03]}>
         <boxGeometry args={[w * 0.35, h * 0.22, 0.015]} />
         <meshStandardMaterial
           color="#0f172a"
           emissive={accent}
-          emissiveIntensity={isSelected ? 0.45 : 0.15}
+          emissiveIntensity={isSelected ? 0.55 : 0.15}
         />
       </mesh>
+
+      {isSelected && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+            <ringGeometry args={[w * 0.42, w * 0.58, 32]} />
+            <meshBasicMaterial color={accent} transparent opacity={0.55} depthWrite={false} />
+          </mesh>
+          <pointLight color={accent} intensity={0.35} distance={1.2} position={[0, h * 0.6, 0.1]} />
+        </>
+      )}
 
       {/* Hit area */}
       <mesh

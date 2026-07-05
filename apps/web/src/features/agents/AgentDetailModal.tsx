@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Share2, User, Video, X } from "lucide-react";
 import type { Agent } from "@raisehack/shared";
@@ -10,7 +9,6 @@ import { useAgentTracking } from "@/features/scene/AgentTrackingProvider";
 import { useSelection } from "@/features/selection/SelectionProvider";
 import { FloorPlanPreview } from "@/features/departments/FloorPlanPreview";
 import { getVoiceAgent, getAngieSubagents } from "@/data/voiceAgents";
-import { meetAppUrl } from "@/lib/meetAppUrl";
 
 type PanelTab = "overview" | "structure" | "activity";
 
@@ -72,7 +70,8 @@ function clampPanelPosition(
 }
 
 export function AgentDetailModal() {
-  const { selectedAgent, selectedDepartment, clearSelection } = useSelection();
+  const { selectedAgent, selectedDepartment, clearSelection, openMeetForAgent } =
+    useSelection();
   const { screenAnchorRef } = useAgentTracking();
   const [tab, setTab] = useState<PanelTab>("activity");
   const [visible, setVisible] = useState(false);
@@ -343,18 +342,15 @@ export function AgentDetailModal() {
         </div>
         <div className="flex items-center gap-2">
           {selectedAgent.meetUrl && (
-            <Link
-              href={meetAppUrl({
-                url: selectedAgent.meetUrl,
-                agent: selectedAgent.name,
-                voiceAgent: selectedAgent.voiceAgentId,
-              })}
+            <button
+              type="button"
+              onClick={() => openMeetForAgent(selectedAgent.id)}
               className="flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium text-slate-900 transition hover:opacity-90"
               style={{ background: accent }}
             >
               <Video className="h-3.5 w-3.5" />
               Meet
-            </Link>
+            </button>
           )}
           <button
             type="button"

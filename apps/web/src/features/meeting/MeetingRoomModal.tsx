@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Video, X } from "lucide-react";
+import { Users, X } from "lucide-react";
 import { getDepartmentById } from "@/data/departments";
+import { MeetDeployContent } from "@/features/meet/MeetDeployContent";
 import { useSelection } from "@/features/selection/SelectionProvider";
 
 export function MeetingRoomModal() {
-  const { selectedMeetingRoom, clearSelection } = useSelection();
+  const { selectedMeetingRoom, meetDeployAgent, clearSelection } = useSelection();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -26,28 +27,25 @@ export function MeetingRoomModal() {
 
   return (
     <div
-      className={`fixed inset-0 z-40 flex items-center justify-center transition-opacity duration-300 ${
-        visible ? "opacity-100" : "opacity-0"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="meeting-room-title"
+      className={`pointer-events-none fixed right-6 top-1/2 z-40 w-[min(420px,calc(100vw-2rem))] max-h-[min(640px,90vh)] transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        visible
+          ? "translate-x-0 -translate-y-1/2 scale-100 opacity-100"
+          : "translate-x-10 -translate-y-1/2 scale-[0.96] opacity-0"
       }`}
     >
-      <button
-        type="button"
-        aria-label="Close meeting room"
-        onClick={clearSelection}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-      />
-
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="meeting-room-title"
-        className={`relative w-[min(440px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/10 bg-[#101a14]/92 shadow-2xl shadow-black/50 backdrop-blur-2xl transition-transform duration-300 ${
-          visible ? "translate-y-0" : "translate-y-4"
-        }`}
+        className="pointer-events-auto flex max-h-[min(640px,90vh)] flex-col overflow-hidden rounded-2xl border bg-[#101a14]/95 shadow-2xl shadow-black/50"
+        style={{
+          borderColor: `${accent}44`,
+          boxShadow: visible ? `0 24px 48px rgba(0,0,0,0.45), 0 0 0 1px ${accent}22` : undefined,
+        }}
       >
         <div
-          className="border-b border-white/8 p-6"
-          style={{ background: `linear-gradient(135deg, ${accent}28, transparent 65%)` }}
+          className="shrink-0 border-b border-white/8 p-5"
+          style={{ background: `linear-gradient(135deg, ${accent}32, transparent 65%)` }}
         >
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -57,10 +55,7 @@ export function MeetingRoomModal() {
               >
                 Meeting room · Floor {selectedMeetingRoom.floor}
               </p>
-              <h2
-                id="meeting-room-title"
-                className="mt-1 text-xl font-light text-white"
-              >
+              <h2 id="meeting-room-title" className="mt-1 text-lg font-light text-white">
                 {selectedMeetingRoom.name}
               </h2>
               {selectedMeetingRoom.capacity && (
@@ -81,15 +76,12 @@ export function MeetingRoomModal() {
           </div>
         </div>
 
-        <div className="space-y-5 p-6">
+        <div className="space-y-5 overflow-y-auto p-5">
           <section>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-white/45">
-              Cross-department access
+              Departments in this room
             </p>
-            <p className="mt-1 text-sm text-white/55">
-              Agents and people from these departments can join this room:
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               {departments.map((dept) => (
                 <span
                   key={dept!.id}
@@ -106,29 +98,19 @@ export function MeetingRoomModal() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-white/8 bg-white/5 p-4">
-            <p className="text-[10px] uppercase tracking-wider text-white/35">
-              Use this room for
+          <div className="border-t border-white/8 pt-5">
+            <p className="mb-4 text-[10px] font-semibold uppercase tracking-widest text-white/45">
+              Deploy to Meet
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-white/70">
-              {selectedMeetingRoom.departmentIds.length > 1
-                ? "Cross-team syncs, incident response, and mixed human + agent sessions."
-                : "Team standups and focused department sessions."}
-            </p>
-          </section>
-        </div>
-
-        <div className="border-t border-white/8 px-6 py-4">
-          <a
-            href={selectedMeetingRoom.meetUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-slate-900 transition hover:opacity-90"
-            style={{ background: accent }}
-          >
-            <Video className="h-4 w-4" />
-            Join {selectedMeetingRoom.name}
-          </a>
+            <MeetDeployContent
+              key={`${selectedMeetingRoom.id}-${meetDeployAgent?.id ?? "room"}`}
+              initialMeetingUrl={selectedMeetingRoom.meetUrl}
+              agentName={meetDeployAgent?.name}
+              voiceAgentId={meetDeployAgent?.voiceAgentId ?? "angie"}
+              compact
+              accentColor={accent}
+            />
+          </div>
         </div>
       </div>
     </div>

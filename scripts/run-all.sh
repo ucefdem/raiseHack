@@ -17,6 +17,14 @@ export NEXT_PUBLIC_BACKEND_URL="${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8000
 log_dir="$ROOT/.logs"
 mkdir -p "$log_dir"
 
+# Load worker secrets from worker/.env (GRADIUM_API_KEY, etc.)
+if [ -f "$ROOT/worker/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/worker/.env"
+  set +a
+fi
+
 start() {
   local name="$1" cmd="$2"
   echo ">> $name"
@@ -37,11 +45,12 @@ start backend       "cd backend && uv run uvicorn main:app --host 0.0.0.0 --port
 start hono-api      "cd apps/api && PORT=3001 npm run dev"
 start web-3d        "cd apps/web && PORT=3000 npm run dev"
 
-if [ -n "${GRADIUM_API_KEY:-}" ]; then
-  start worker "cd worker && uv run python main.py"
+if [ -n "${GRADIUM_API_KEY:-}" ] && [ "${GRADIUM_API_KEY}" != "gd_your_key_here" ]; then
+  echo ">> worker (live — Gradium key found)"
 else
-  echo "!! GRADIUM_API_KEY not set → skipping worker (Meet join will not happen)."
+  echo ">> worker (standby — no Gradium key; UI works, Meet join is simulated)"
 fi
+start worker "cd worker && uv run python main.py"
 
 echo ""
 echo "Backend    → http://localhost:8000/health   (logs: .logs/backend.log)"

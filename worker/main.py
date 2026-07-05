@@ -78,9 +78,32 @@ class Worker:
         if target:
             await self._reporter.set(target, message)
 
+    async def _run_standby_session(
+        self, meeting_url: str, voice_agent_id: str | None = None
+    ) -> None:
+        agent = (voice_agent_id or "angie").strip().lower()
+        await self._reporter.set(
+            WorkerState.JOINING_MEETING,
+            f"Standby: simulating deploy for {agent}",
+        )
+        await asyncio.sleep(1.2)
+        await self._reporter.set(
+            WorkerState.IN_MEETING,
+            f"Standby: would join {meeting_url}",
+        )
+        await asyncio.sleep(0.8)
+        await self._reporter.set(
+            WorkerState.LISTENING,
+            "Standby mode — set GRADIUM_API_KEY in worker/.env for live Meet + voice",
+        )
+
     async def _run_session(
         self, meeting_url: str, voice_agent_id: str | None = None
     ) -> None:
+        if config.worker_standby or not config.gradium_configured:
+            await self._run_standby_session(meeting_url, voice_agent_id)
+            return
+
         active = (voice_agent_id or "").strip().lower() or None
         buzzwords = None
         if active and active != "angie":
@@ -138,13 +161,20 @@ class Worker:
 
 
 def main() -> None:
-    try:
-        cfg = speech_config_from_env()
-        asyncio.run(verify_gradium(cfg))
-        logger.info("Gradium API key OK")
-    except RuntimeError as exc:
-        logger.error("%s", exc)
-        sys.exit(1)
+    standby = config.worker_standby or not config.gradium_configured
+    if standby:
+        logger.warning(
+            "Worker standby mode — backend connection only; Meet join is simulated. "
+            "Set GRADIUM_API_KEY in worker/.env for live audio."
+        )
+    else:
+        try:
+            cfg = speech_config_from_env()
+            asyncio.run(verify_gradium(cfg))
+            logger.info("Gradium API key OK")
+        except RuntimeError as exc:
+            logger.error("%s", exc)
+            sys.exit(1)
 
     try:
         asyncio.run(Worker().run())
